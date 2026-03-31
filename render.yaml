@@ -6,7 +6,7 @@ services:
   - type: web
     name: neurox-api
     region: oregon
-    repo: https://github.com/YOUR_USERNAME/neurogravity.git
+    repo: https://github.com/Apocalyypse26/Neurogravity.git
     branch: main
     rootDir: backend
     buildCommand: pip install -r requirements.txt
@@ -27,7 +27,7 @@ services:
 #  - type: web
 #    name: neurox-frontend
 #    region: oregon
-#    repo: https://github.com/YOUR_USERNAME/neurogravity.git
+#    repo: https://github.com/Apocalyypse26/Neurogravity.git
 #    branch: main
 #    buildCommand: npm install && npm run build
 #    staticPublishPath: dist
