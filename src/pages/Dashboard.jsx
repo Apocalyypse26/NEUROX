@@ -433,6 +433,42 @@ export default function Dashboard({ session }) {
           font-size: 1rem;
         }
 
+        .payment-success-banner {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 1rem 1.5rem;
+          background: rgba(0, 212, 170, 0.1);
+          border: 1px solid rgba(0, 212, 170, 0.3);
+          border-radius: 12px;
+          color: var(--color-accent);
+          font-size: 0.95rem;
+          font-weight: 600;
+          margin-bottom: 2rem;
+          animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        .dismiss-btn {
+          margin-left: auto;
+          background: none;
+          border: none;
+          color: var(--color-accent);
+          cursor: pointer;
+          padding: 4px;
+          display: flex;
+          opacity: 0.7;
+          transition: var(--transition);
+        }
+
+        .dismiss-btn:hover {
+          opacity: 1;
+        }
+
         .dashboard-grid-layout {
           display: grid;
           grid-template-columns: 1fr 380px;
