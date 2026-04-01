@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -22,6 +22,7 @@ from services import (
     JobStatus,
     USE_REAL_TRIBE
 )
+from services.stripe_service import stripe_service, CREDIT_PACKAGES, SUBSCRIPTION_PLANS
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -370,9 +371,122 @@ async def tribe_info():
             "/api/jobs/{job_id}": "Get job status",
             "/api/jobs/upload/{upload_id}": "Get job by upload ID",
             "/api/analyze": "Sync analyze with TRIBE pipeline",
-            "/api/analyze-sync": "Legacy sync analyze"
+            "/api/analyze-sync": "Legacy sync analyze",
+            "/api/packages": "List available credit packages",
+            "/api/checkout": "Create Stripe checkout session",
+            "/api/checkout/status/{session_id}": "Check checkout status",
+            "/api/webhook/stripe": "Stripe webhook endpoint"
         }
     }
+
+
+# --- Stripe Payment Endpoints ---
+
+class CheckoutRequest(BaseModel):
+    package_id: str
+    user_id: str
+    email: str
+    success_url: str
+    cancel_url: str
+
+    @field_validator('package_id')
+    @classmethod
+    def validate_package_id(cls, v):
+        valid = list(CREDIT_PACKAGES.keys()) + list(SUBSCRIPTION_PLANS.keys())
+        if v not in valid:
+            raise ValueError(f'package_id must be one of: {", ".join(valid)}')
+        return v
+
+    @field_validator('email')
+    @classmethod
+    def validate_email(cls, v):
+        if not v or '@' not in v:
+            raise ValueError('Valid email required')
+        return v
+
+
+@app.get("/api/packages")
+@limiter.limit("60/minute")
+async def get_packages(request: Request):
+    return {
+        "credit_packages": {
+            k: {
+                "name": v["name"],
+                "credits": v["credits"],
+                "price_display": v["price_display"],
+            }
+            for k, v in CREDIT_PACKAGES.items()
+        },
+        "subscription_plans": {
+            k: {
+                "name": v["name"],
+                "credits_per_month": v["credits_per_month"],
+                "price_display": v["price_display"],
+            }
+            for k, v in SUBSCRIPTION_PLANS.items()
+        },
+        "stripe_enabled": stripe_service.enabled,
+    }
+
+
+@app.post("/api/checkout")
+@limiter.limit("10/minute")
+async def create_checkout(request: Request, req: CheckoutRequest):
+    try:
+        if req.package_id in CREDIT_PACKAGES:
+            result = stripe_service.create_checkout_session(
+                package_id=req.package_id,
+                user_id=req.user_id,
+                email=req.email,
+                success_url=req.success_url,
+                cancel_url=req.cancel_url,
+            )
+        elif req.package_id in SUBSCRIPTION_PLANS:
+            result = stripe_service.create_subscription_checkout(
+                plan_id=req.package_id,
+                user_id=req.user_id,
+                email=req.email,
+                success_url=req.success_url,
+                cancel_url=req.cancel_url,
+            )
+        else:
+            raise HTTPException(status_code=400, detail="Invalid package_id")
+
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"[CHECKOUT ERROR] {e}")
+        raise HTTPException(status_code=500, detail="Failed to create checkout session")
+
+
+@app.get("/api/checkout/status/{session_id}")
+@limiter.limit("30/minute")
+async def get_checkout_status(request: Request, session_id: str):
+    try:
+        result = stripe_service.get_session(session_id)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"[CHECKOUT STATUS ERROR] {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve checkout status")
+
+
+@app.post("/api/webhook/stripe")
+async def stripe_webhook(request: Request, stripe_signature: str = Header(None)):
+    try:
+        payload = await request.body()
+        result = stripe_service.handle_webhook(payload, stripe_signature)
+        print(f"[WEBHOOK] Processed: {result}")
+        return {"received": True, "result": result}
+    except ValueError as e:
+        print(f"[WEBHOOK ERROR] {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"[WEBHOOK ERROR] {e}")
+        raise HTTPException(status_code=400, detail="Webhook processing failed")
+
 
 if __name__ == "__main__":
     import uvicorn

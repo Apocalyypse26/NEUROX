@@ -4,6 +4,8 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 
+import { Analytics } from '@vercel/analytics/react'
+
 const rootElement = document.getElementById('root')
 
 if (!rootElement) {
@@ -14,6 +16,7 @@ if (!rootElement) {
       <ErrorBoundary>
         <BrowserRouter>
           <App />
+          <Analytics />
         </BrowserRouter>
       </ErrorBoundary>
     </React.StrictMode>

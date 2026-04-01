@@ -366,6 +366,20 @@ export default function Home() {
                 Deploy Now <span className="btn-arrow">→</span>
               </Link>
             </div>
+
+            <div className="pricing-card-animated tier-credits">
+              <div className="tier-header">
+                <span className="tier-name">CREDIT PACKS</span>
+                <div className="tier-price">$15+</div>
+              </div>
+              <ul className="tier-benefits">
+                <li><span className="check">✓</span> 10 scans for $15</li>
+                <li><span className="check">✓</span> 50 scans for $49</li>
+                <li><span className="check">✓</span> 200 scans for $99</li>
+                <li><span className="check">✓</span> No subscription needed</li>
+              </ul>
+              <Link to="/auth" className="btn-tier">Buy Credits</Link>
+            </div>
           </div>
         </section>
 

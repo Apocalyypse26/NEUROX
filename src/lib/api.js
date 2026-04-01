@@ -114,3 +114,49 @@ export async function getTribeInfo() {
     return null;
   }
 }
+
+// --- Stripe Payment Functions ---
+
+export async function getPackages() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/packages`);
+    if (response.ok) {
+      return response.json();
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export async function createCheckoutSession(packageId, userId, email) {
+  const successUrl = `${window.location.origin}/dashboard?payment=success`;
+  const cancelUrl = `${window.location.origin}/dashboard/project`;
+
+  const response = await fetch(`${API_BASE_URL}/api/checkout`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      package_id: packageId,
+      user_id: userId,
+      email: email,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function getCheckoutStatus(sessionId) {
+  const response = await fetch(`${API_BASE_URL}/api/checkout/status/${sessionId}`);
+  if (!response.ok) {
+    throw new Error('Failed to get checkout status');
+  }
+  return response.json();
+}

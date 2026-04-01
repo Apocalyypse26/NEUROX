@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useDropzone } from 'react-dropzone'
+import StripeCheckout from '../components/StripeCheckout'
 import { 
   ChevronLeft, Upload, FileImageIcon, Film, Trash2, AlertCircle, 
   Lock, CreditCard, FolderOpen, Zap, X, Check, Loader2, Grid, List
@@ -82,12 +83,19 @@ export default function ProjectView({ session }) {
   const [mounted, setMounted] = useState(false)
   const [viewMode, setViewMode] = useState('grid')
   const [isDragActive, setIsDragActive] = useState(false)
+  const [showStripe, setShowStripe] = useState(false)
 
   useEffect(() => {
     fetchProject()
     fetchUploads()
     fetchProfile()
     setMounted(true)
+    
+    const urlParams = new URLSearchParams(window.location.search)
+    if (urlParams.get('payment') === 'success') {
+      fetchProfile()
+      window.history.replaceState({}, '', window.location.pathname)
+    }
   }, [projectId])
 
   const fetchProfile = async () => {
@@ -95,13 +103,13 @@ export default function ProjectView({ session }) {
     if (data) setCredits(data.available_credits)
   }
 
-  const handleBuyCredits = async () => {
-    const { error } = await supabase.rpc('buy_credits', { amount: 10 })
-    if (!error) {
-      setCredits(prev => (prev || 0) + 10)
-    } else {
-      setErrorMsg("Payment gateway offline.")
-    }
+  const handleBuyCredits = () => {
+    setShowStripe(true)
+  }
+
+  const handleStripeSuccess = () => {
+    setShowStripe(false)
+    fetchProfile()
   }
 
   const fetchProject = async () => {
@@ -377,6 +385,15 @@ export default function ProjectView({ session }) {
           </div>
         </div>
       </main>
+
+      {showStripe && (
+        <StripeCheckout
+          userId={session.user.id}
+          email={session.user.email}
+          onClose={() => setShowStripe(false)}
+          onSuccess={handleStripeSuccess}
+        />
+      )}
 
       <style>{`
         .project-page {

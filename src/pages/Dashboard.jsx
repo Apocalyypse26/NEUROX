@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Link, useNavigate } from 'react-router-dom'
-import { Folder, Plus, LogOut, Code, Shield, Zap, ChevronRight, FolderOpen, Clock, MoreVertical } from 'lucide-react'
+import { Folder, Plus, LogOut, Code, Shield, Zap, ChevronRight, FolderOpen, Clock, MoreVertical, Check, X } from 'lucide-react'
 
 const ProjectCard = ({ project, index }) => {
   const [hovered, setHovered] = useState(false)
@@ -55,11 +55,18 @@ export default function Dashboard({ session }) {
   const [newProjectName, setNewProjectName] = useState('')
   const [isCreating, setIsCreating] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [paymentMessage, setPaymentMessage] = useState('')
   const navigate = useNavigate()
 
   useEffect(() => {
     fetchProjects()
     setMounted(true)
+    
+    const urlParams = new URLSearchParams(window.location.search)
+    if (urlParams.get('payment') === 'success') {
+      setPaymentMessage('Payment successful! Your credits have been added.')
+      window.history.replaceState({}, '', window.location.pathname)
+    }
   }, [])
 
   const fetchProjects = async () => {
@@ -134,6 +141,16 @@ export default function Dashboard({ session }) {
           <h1>Welcome back, Operator</h1>
           <p>Manage your projects and analyze viral potential</p>
         </div>
+
+        {paymentMessage && (
+          <div className="payment-success-banner">
+            <Check size={18} />
+            {paymentMessage}
+            <button onClick={() => setPaymentMessage('')} className="dismiss-btn">
+              <X size={16} />
+            </button>
+          </div>
+        )}
 
         <div className="dashboard-grid-layout">
           {/* Projects Section */}

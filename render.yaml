@@ -20,6 +20,10 @@ services:
         value: https://neurogravity.vercel.app,https://*.vercel.app
       - key: PYTHON_VERSION
         value: 3.11.0
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
 
 # Uncomment below to deploy frontend as static site on Render
 # For production, Vercel is recommended for frontend
