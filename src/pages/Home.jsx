@@ -225,6 +225,15 @@ export default function Home() {
                     <span className="tag-scan">IMAGE_SCAN</span>
                     <span className="tag-model">NEURO-v3</span>
                   </div>
+                  <div className="preview-secondary-scan">
+                    <img src="/viral_pepe_meme.png" alt="Viral Meme" className="preview-image-secondary" />
+                    <div className="scan-overlay" />
+                    <div className="scan-line-anim" />
+                  </div>
+                  <div className="preview-tags">
+                    <span className="tag-scan">VIRAL_DETECTED</span>
+                    <span className="tag-model">THREAT_LEVEL</span>
+                  </div>
                   <div className="preview-ranking">
                     <div className="ranking-header">TOP THREATS</div>
                     <div className="ranking-row active">
@@ -236,6 +245,26 @@ export default function Home() {
                       <span className="rank">#2</span>
                       <span className="name">cyber_doge_meme.png</span>
                       <span className="score-high">94</span>
+                    </div>
+                    <div className="ranking-row">
+                      <span className="rank">#3</span>
+                      <span className="name">diamond_hands_wagmi.png</span>
+                      <span className="score-high">91</span>
+                    </div>
+                    <div className="ranking-row">
+                      <span className="rank">#4</span>
+                      <span className="name">laser_eyes_btc.png</span>
+                      <span className="score-mid">87</span>
+                    </div>
+                    <div className="ranking-row">
+                      <span className="rank">#5</span>
+                      <span className="name">wojak_feels.png</span>
+                      <span className="score-mid">83</span>
+                    </div>
+                    <div className="ranking-row">
+                      <span className="rank">#6</span>
+                      <span className="name">chad_trader.png</span>
+                      <span className="score-mid">79</span>
                     </div>
                   </div>
                 </div>
