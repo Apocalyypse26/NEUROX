@@ -36,6 +36,13 @@ export default function Home() {
   const [typingText, setTypingText] = useState('');
   const [showScrollHint, setShowScrollHint] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  
+  const memeImages = [
+    { src: '/cyber_doge_meme.png', alt: 'Cyber Doge Meme', scanTag: 'IMAGE_SCAN', modelTag: 'NEURO-v3' },
+    { src: '/viral_pepe_meme.png', alt: 'Viral Pepe Meme', scanTag: 'VIRAL_DETECTED', modelTag: 'THREAT_LEVEL' },
+    { src: '/PEPE_Moon.mp4.png', alt: 'PEPE Moon Meme', scanTag: 'MOON_MISSION', modelTag: 'VIRAL_v2' },
+  ];
   
   const analysisText = `> Neural scan complete.
 > Dopamine index: 847% BASELINE
@@ -62,6 +69,14 @@ export default function Home() {
       window.removeEventListener('scroll', handleScroll);
     };
   }, []);
+
+  useEffect(() => {
+    const imageInterval = setInterval(() => {
+      setCurrentImageIndex((prevIndex) => (prevIndex + 1) % memeImages.length);
+    }, 60000);
+    
+    return () => clearInterval(imageInterval);
+  }, [memeImages.length]);
 
   const features = [
     { icon: <Brain className="feature-svg" />, title: 'Neural Analysis', desc: 'Deep-learning models trained on viral meme patterns across all major platforms' },
@@ -217,22 +232,13 @@ export default function Home() {
               <div className="preview-body">
                 <div className="preview-left">
                   <div className="preview-scan">
-                    <img src="/cyber_doge_meme.png" alt="Meme" className="preview-image" />
+                    <img src={memeImages[currentImageIndex].src} alt={memeImages[currentImageIndex].alt} className="preview-image" />
                     <div className="scan-overlay" />
                     <div className="scan-line-anim" />
                   </div>
                   <div className="preview-tags">
-                    <span className="tag-scan">IMAGE_SCAN</span>
-                    <span className="tag-model">NEURO-v3</span>
-                  </div>
-                  <div className="preview-secondary-scan">
-                    <img src="/viral_pepe_meme.png" alt="Viral Meme" className="preview-image-secondary" />
-                    <div className="scan-overlay" />
-                    <div className="scan-line-anim" />
-                  </div>
-                  <div className="preview-tags">
-                    <span className="tag-scan">VIRAL_DETECTED</span>
-                    <span className="tag-model">THREAT_LEVEL</span>
+                    <span className="tag-scan">{memeImages[currentImageIndex].scanTag}</span>
+                    <span className="tag-model">{memeImages[currentImageIndex].modelTag}</span>
                   </div>
                   <div className="preview-ranking">
                     <div className="ranking-header">TOP THREATS</div>
