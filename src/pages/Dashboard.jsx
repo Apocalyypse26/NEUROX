@@ -1,17 +1,36 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Link, useNavigate } from 'react-router-dom'
-import { Folder, Plus, LogOut, Code, Shield, Zap, ChevronRight, FolderOpen, Clock, MoreVertical, Check, X } from 'lucide-react'
+import { exportToJSON } from '../lib/utils'
+import { Folder, Plus, LogOut, Code, Shield, Zap, ChevronRight, FolderOpen, Clock, MoreVertical, Check, X, Download, Link as LinkIcon } from 'lucide-react'
 
-const ProjectCard = ({ project, index }) => {
+const ProjectCard = ({ project, index, onExport }) => {
   const [hovered, setHovered] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
+  const [copied, setCopied] = useState(false)
+  
+  const handleCopyLink = () => {
+    const link = `${window.location.origin}/dashboard/project/${project.id}`
+    navigator.clipboard.writeText(link)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+    setShowMenu(false)
+  }
+
+  const handleExport = () => {
+    onExport(project)
+    setShowMenu(false)
+  }
   
   return (
     <Link 
       to={`/dashboard/project/${project.id}`} 
       className="project-card-link"
       onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseLeave={() => {
+        setHovered(false)
+        setShowMenu(false)
+      }}
       style={{ animationDelay: `${index * 0.1}s` }}
     >
       <div className={`project-card ${hovered ? 'hovered' : ''}`}>
@@ -19,8 +38,41 @@ const ProjectCard = ({ project, index }) => {
           <div className="project-icon">
             <Folder size={20} />
           </div>
-          <div className="project-menu">
+          <div 
+            className="project-menu"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              setShowMenu(!showMenu)
+            }}
+          >
             <MoreVertical size={16} />
+            {showMenu && (
+              <div className="project-menu-dropdown">
+                <button 
+                  className="menu-option"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    handleCopyLink()
+                  }}
+                >
+                  {copied ? <Check size={14} /> : <LinkIcon size={14} />}
+                  {copied ? 'Copied!' : 'Copy Link'}
+                </button>
+                <button 
+                  className="menu-option"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    handleExport()
+                  }}
+                >
+                  <Download size={14} />
+                  Export JSON
+                </button>
+              </div>
+            )}
           </div>
         </div>
         <h3 className="project-name">{project.name}</h3>
@@ -102,6 +154,22 @@ export default function Dashboard({ session }) {
     navigate('/')
   }
 
+  const handleExportProject = async (project) => {
+    const { data: uploads } = await supabase
+      .from('uploads')
+      .select('*')
+      .eq('project_id', project.id)
+    
+    exportToJSON({
+      project: {
+        id: project.id,
+        name: project.name,
+        createdAt: project.created_at
+      },
+      uploads: uploads || []
+    }, `neurox-project-${project.name}`)
+  }
+
   return (
     <div className="dashboard-page">
       <div className="dashboard-bg">
@@ -178,8 +246,8 @@ export default function Dashboard({ session }) {
               </div>
             ) : (
               <div className="projects-grid">
-                {projects.map((project, i) => (
-                  <ProjectCard key={project.id} project={project} index={i} />
+                  {projects.map((project, i) => (
+                  <ProjectCard key={project.id} project={project} index={i} onExport={handleExportProject} />
                 ))}
               </div>
             )}
@@ -620,11 +688,54 @@ export default function Dashboard({ session }) {
           padding: 4px;
           border-radius: 4px;
           transition: var(--transition);
+          position: relative;
         }
 
         .project-menu:hover {
           background: rgba(255, 255, 255, 0.05);
           color: var(--color-text);
+        }
+
+        .project-menu-dropdown {
+          position: absolute;
+          top: 100%;
+          right: 0;
+          margin-top: 8px;
+          background: linear-gradient(135deg, rgba(25, 15, 40, 0.98) 0%, rgba(15, 8, 25, 0.99) 100%);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 10px;
+          padding: 6px;
+          z-index: 50;
+          min-width: 140px;
+          animation: menuSlide 0.2s ease;
+          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        @keyframes menuSlide {
+          from { opacity: 0; transform: translateY(-5px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        .menu-option {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          width: 100%;
+          padding: 8px 12px;
+          background: transparent;
+          border: none;
+          border-radius: 6px;
+          color: var(--color-text-muted);
+          font-size: 0.8rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: var(--transition);
+          text-decoration: none;
+        }
+
+        .menu-option:hover {
+          background: rgba(255, 111, 55, 0.15);
+          color: var(--color-primary);
         }
 
         .project-name {

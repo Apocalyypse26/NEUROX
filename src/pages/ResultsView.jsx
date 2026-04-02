@@ -2,10 +2,12 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { createAnalysisJob, getJobByUpload, pollJobUntilComplete, checkApiHealth, runSyncAnalysis } from '../lib/api'
+import { exportToJSON, shareToTwitter, shareToTelegram, generateShareableImage } from '../lib/utils'
 import { 
   ChevronLeft, Target, AlertTriangle, CheckCircle, Zap, Eye, 
   Crosshair, Cpu, ThumbsUp, ThumbsDown, Send, Loader2, Share2,
-  Download, Filter, Play, Pause, Volume2, Radio, BarChart3, Activity
+  Download, Filter, Play, Pause, Volume2, Radio, BarChart3, Activity,
+  Globe, MessageCircle, Image, ChevronDown, Copy, Check
 } from 'lucide-react'
 
 const AnimatedScore = ({ score, maxScore = 100, color }) => {
@@ -92,6 +94,8 @@ export default function ResultsView({ session }) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [analysisStatus, setAnalysisStatus] = useState('initializing')
   const [jobProgress, setJobProgress] = useState(0)
+  const [showShareMenu, setShowShareMenu] = useState(false)
+  const [copied, setCopied] = useState(false)
   const videoRef = useRef(null)
   const timelineRef = useRef(null)
 
@@ -530,11 +534,83 @@ export default function ResultsView({ session }) {
 
             {/* Action Buttons */}
             <div className="action-buttons">
-              <button className="action-btn secondary">
-                <Share2 size={18} />
-                Share Results
-              </button>
-              <button className="action-btn secondary">
+              <div className="share-dropdown-container">
+                <button 
+                  className="action-btn secondary"
+                  onClick={() => setShowShareMenu(!showShareMenu)}
+                >
+                  <Share2 size={18} />
+                  Share Results
+                  <ChevronDown size={14} />
+                </button>
+                {showShareMenu && (
+                  <div className="share-dropdown">
+                    <button 
+                      className="share-option"
+                      onClick={() => {
+                        shareToTwitter({
+                          score: globalScore,
+                          fileName: upload.file_name,
+                          bestPlatform
+                        })
+                        setShowShareMenu(false)
+                      }}
+                    >
+                      <Globe size={16} />
+                      Share on X
+                    </button>
+                    <button 
+                      className="share-option"
+                      onClick={() => {
+                        shareToTelegram({
+                          score: globalScore,
+                          fileName: upload.file_name,
+                          bestPlatform
+                        })
+                        setShowShareMenu(false)
+                      }}
+                    >
+                      <MessageCircle size={16} />
+                      Share on Telegram
+                    </button>
+                    <button 
+                      className="share-option"
+                      onClick={async () => {
+                        await generateShareableImage({
+                          score: globalScore,
+                          fileName: upload.file_name,
+                          bestPlatform,
+                          confidence: confidence.text
+                        })
+                        setShowShareMenu(false)
+                      }}
+                    >
+                      <Image size={16} />
+                      Download as Image
+                    </button>
+                  </div>
+                )}
+              </div>
+              <button 
+                className="action-btn secondary"
+                onClick={() => exportToJSON({
+                  analysis: {
+                    globalScore,
+                    confidence,
+                    subScores,
+                    rank,
+                    fixes,
+                    bestPlatform,
+                    dropOffRisk
+                  },
+                  media: {
+                    fileName: upload.file_name,
+                    mediaType: upload.media_type,
+                    fileSize: upload.file_size,
+                    url: upload.file_url
+                  }
+                }, `neurox-${upload.file_name}`)}
+              >
                 <Download size={18} />
                 Export Report
               </button>
@@ -1118,6 +1194,52 @@ export default function ResultsView({ session }) {
           border-color: var(--color-primary);
           color: var(--color-primary);
           background: var(--color-primary-soft);
+        }
+
+        .share-dropdown-container {
+          position: relative;
+          flex: 1;
+        }
+
+        .share-dropdown {
+          position: absolute;
+          top: 100%;
+          left: 0;
+          right: 0;
+          margin-top: 8px;
+          background: linear-gradient(135deg, rgba(25, 15, 40, 0.95) 0%, rgba(15, 8, 25, 0.98) 100%);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 12px;
+          padding: 8px;
+          z-index: 50;
+          animation: dropdownSlide 0.2s ease;
+          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        @keyframes dropdownSlide {
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        .share-option {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          width: 100%;
+          padding: 10px 14px;
+          background: transparent;
+          border: none;
+          border-radius: 8px;
+          color: var(--color-text-muted);
+          font-size: 0.85rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: var(--transition);
+        }
+
+        .share-option:hover {
+          background: rgba(255, 111, 55, 0.15);
+          color: var(--color-primary);
         }
 
         /* Loading & Error States */
