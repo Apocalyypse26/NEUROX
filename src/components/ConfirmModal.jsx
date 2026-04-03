@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { AlertTriangle, Loader2, Trash2 } from 'lucide-react'
 
 export default function ConfirmModal({ 

@@ -2,6 +2,7 @@ import asyncio
 import uuid
 import time
 import os
+import httpx
 from typing import Dict, Optional, Any, Callable
 from enum import Enum
 from dataclasses import dataclass, field
@@ -59,11 +60,16 @@ class JobManager:
         
         if self._db_enabled:
             print("[JOB_MANAGER] Database persistence enabled")
-            asyncio.create_task(self._load_jobs_from_db())
         else:
             print("[JOB_MANAGER] WARNING: Running without database persistence (SUPABASE_SERVICE_ROLE_KEY not set)")
         
         print(f"[JOB_MANAGER] Initialized (cleanup every {self._cleanup_interval}s, max age {self._max_job_age}s)")
+
+    def start(self):
+        """Call this from lifespan to initialize async tasks after event loop exists"""
+        if self._db_enabled:
+            asyncio.create_task(self._load_jobs_from_db())
+        self.start_cleanup_scheduler()
 
     def start_cleanup_scheduler(self):
         if self._cleanup_task is not None and not self._cleanup_task.done():
@@ -85,7 +91,8 @@ class JobManager:
             self._cleanup_task = None
             print("[JOB_MANAGER] Stopped cleanup scheduler")
 
-    async def _get_db_headers(self) -> Dict[str, str]:
+    def _get_db_headers(self) -> Dict[str, str]:
+        """Get headers for service role authentication - synchronous"""
         return {
             "apikey": self._supabase_service_key,
             "Authorization": f"Bearer {self._supabase_service_key}",
@@ -99,11 +106,10 @@ class JobManager:
             return
         
         try:
-            import httpx
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(
                     f"{self._supabase_url}/rest/v1/jobs",
-                    headers=await self._get_db_headers(),
+                    headers=self._get_db_headers(),
                     params={
                         "status": "not.in.(completed,failed)",
                         "select": "*"
@@ -139,7 +145,6 @@ class JobManager:
             return
         
         try:
-            import httpx
             job_data = {
                 "job_id": job.job_id,
                 "upload_id": job.upload_id,
@@ -156,14 +161,14 @@ class JobManager:
                 if update_only:
                     response = await client.patch(
                         f"{self._supabase_url}/rest/v1/jobs",
-                        headers=await self._get_db_headers(),
+                        headers=self._get_db_headers(),
                         params={"job_id": f"eq.{job.job_id}"},
                         json=job_data
                     )
                 else:
                     response = await client.post(
                         f"{self._supabase_url}/rest/v1/jobs",
-                        headers=await self._get_db_headers(),
+                        headers=self._get_db_headers(),
                         json=job_data
                     )
                 
@@ -178,12 +183,11 @@ class JobManager:
             return
         
         try:
-            import httpx
             max_age_hours = self._max_job_age // 3600
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.post(
                     f"{self._supabase_url}/rest/v1/rpc/cleanup_old_jobs",
-                    headers=await self._get_db_headers(),
+                    headers=self._get_db_headers(),
                     json={"max_age_hours": max_age_hours}
                 )
                 
@@ -206,7 +210,8 @@ class JobManager:
         )
         self.jobs[job_id] = job
         
-        asyncio.create_task(self._persist_job(job))
+        if self._db_enabled:
+            asyncio.create_task(self._persist_job(job))
         
         print(f"[JOB_MANAGER] Created job {job_id} for upload {upload_id}")
         return job_id
@@ -241,7 +246,8 @@ class JobManager:
             job.status = JobStatus.PREPROCESSING
             job.progress = 10
             job.updated_at = time.time()
-            asyncio.create_task(self._persist_job(job, update_only=True))
+            if self._db_enabled:
+                asyncio.create_task(self._persist_job(job, update_only=True))
             
             preprocess_result = await preprocess_func(job.file_url, job.media_type)
             print(f"[JOB_MANAGER] Preprocessing done: {preprocess_result.to_dict()}")
@@ -249,7 +255,8 @@ class JobManager:
             job.status = JobStatus.OCR_EXTRACTING
             job.progress = 25
             job.updated_at = time.time()
-            asyncio.create_task(self._persist_job(job, update_only=True))
+            if self._db_enabled:
+                asyncio.create_task(self._persist_job(job, update_only=True))
             
             ocr_result = await ocr_func(job.file_url, job.media_type)
             print(f"[JOB_MANAGER] OCR done: {ocr_result.to_dict()}")
@@ -257,7 +264,8 @@ class JobManager:
             job.status = JobStatus.TRIBE_ANALYZING
             job.progress = 50
             job.updated_at = time.time()
-            asyncio.create_task(self._persist_job(job, update_only=True))
+            if self._db_enabled:
+                asyncio.create_task(self._persist_job(job, update_only=True))
             
             seed = sum(ord(c) for c in job.upload_id)
             tribe_output = await tribe_func(job.file_url, job.media_type, seed)
@@ -269,7 +277,8 @@ class JobManager:
             job.status = JobStatus.MAPPING_SCORES
             job.progress = 75
             job.updated_at = time.time()
-            asyncio.create_task(self._persist_job(job, update_only=True))
+            if self._db_enabled:
+                asyncio.create_task(self._persist_job(job, update_only=True))
             
             neuro_metrics = score_mapper_func(tribe_output)
             final_result = neuro_metrics.to_neurox_format()
@@ -278,7 +287,8 @@ class JobManager:
             job.status = JobStatus.COMPLETED
             job.progress = 100
             job.updated_at = time.time()
-            asyncio.create_task(self._persist_job(job, update_only=True))
+            if self._db_enabled:
+                asyncio.create_task(self._persist_job(job, update_only=True))
             
             print(f"[JOB_MANAGER] Job {job_id} completed with score {final_result['globalScore']}")
             return final_result
@@ -287,7 +297,8 @@ class JobManager:
             job.status = JobStatus.FAILED
             job.error = str(e)
             job.updated_at = time.time()
-            asyncio.create_task(self._persist_job(job, update_only=True))
+            if self._db_enabled:
+                asyncio.create_task(self._persist_job(job, update_only=True))
             print(f"[JOB_MANAGER] Job {job_id} failed: {e}")
             raise
 
@@ -296,7 +307,8 @@ class JobManager:
             self.jobs[job_id].status = status
             self.jobs[job_id].progress = progress
             self.jobs[job_id].updated_at = time.time()
-            asyncio.create_task(self._persist_job(self.jobs[job_id], update_only=True))
+            if self._db_enabled:
+                asyncio.create_task(self._persist_job(self.jobs[job_id], update_only=True))
 
     def get_all_jobs(self) -> Dict[str, Dict[str, Any]]:
         return {job_id: job.to_dict() for job_id, job in self.jobs.items()}

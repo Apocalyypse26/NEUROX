@@ -68,7 +68,6 @@ class OCRService:
             ]
             
             import random
-            import hashlib
             seed_val = sum(ord(c) for c in file_url)
             random.seed(seed_val)
             
@@ -93,6 +92,9 @@ class OCRService:
             )
 
     async def _extract_from_video(self, file_url: str) -> OCRResult:
+        if not is_url_safe(file_url):
+            raise ValueError(f"URL not allowed for security reasons: {file_url}")
+        
         print("[OCR] Simulating video OCR (would extract from key frames)")
         
         texts = ["WAGMI", "HODL", "MOON"]

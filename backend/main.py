@@ -67,7 +67,7 @@ async def lifespan(app: FastAPI):
     print(f"[STARTUP] NEUROX Backend v2.0 starting...")
     print(f"[STARTUP] TRIBE mode: {'REAL' if USE_REAL_TRIBE else 'MOCK'}")
     print(f"[STARTUP] Rate limiting enabled")
-    job_manager.start_cleanup_scheduler()
+    job_manager.start()
     yield
     print("[SHUTDOWN] Cleaning up...")
     job_manager.stop_cleanup_scheduler()

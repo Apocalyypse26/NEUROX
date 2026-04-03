@@ -1,8 +1,9 @@
 import os
+import asyncio
+import httpx
 import stripe
 from typing import Dict, Any, Optional
 import threading
-import asyncio
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
@@ -31,7 +32,6 @@ async def _add_credits_to_user(user_id: str, credits: int) -> bool:
         }
         
         async with asyncio.timeout(10):
-            import httpx
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     f"{SUPABASE_URL}/rest/v1/rpc/buy_credits",
@@ -191,7 +191,8 @@ class StripeService:
 
         return {"url": session.url, "session_id": session.id}
 
-    def handle_webhook(self, payload: bytes, sig_header: str) -> Dict[str, Any]:
+    async def handle_webhook_async(self, payload: bytes, sig_header: str) -> Dict[str, Any]:
+        """Async webhook handler - use this for async contexts"""
         if not self.enabled:
             raise ValueError("Stripe is not configured")
 
@@ -218,10 +219,7 @@ class StripeService:
             credits = int(metadata.get("credits", 0))
             
             if user_id and credits > 0:
-                try:
-                    asyncio.run(_add_credits_to_user(user_id, credits))
-                except Exception as e:
-                    print(f"[WEBHOOK] Warning: Credit addition failed but webhook processed: {e}")
+                await _add_credits_to_user(user_id, credits)
             
             return {
                 "event": "credits_purchased",
@@ -246,6 +244,12 @@ class StripeService:
             }
 
         return {"event": event["type"]}
+
+    def handle_webhook(self, payload: bytes, sig_header: str) -> Dict[str, Any]:
+        """Sync wrapper for backward compatibility - prefer handle_webhook_async"""
+        return asyncio.get_event_loop().run_until_complete(
+            self.handle_webhook_async(payload, sig_header)
+        )
 
     def get_session(self, session_id: str) -> Dict[str, Any]:
         if not self.enabled:

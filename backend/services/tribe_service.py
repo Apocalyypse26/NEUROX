@@ -2,10 +2,10 @@ import os
 import math
 import random
 import numpy as np
+import httpx
 from typing import Dict, List, Optional, Any
 import google.generativeai as genai
 from PIL import Image
-import requests
 from io import BytesIO
 import base64
 from urllib.parse import urlparse
@@ -147,7 +147,7 @@ class TribeService:
                 if not is_url_safe(file_path):
                     raise ValueError(f"URL not allowed for security reasons: {file_path}")
                 
-                response = requests.get(file_path, timeout=10)
+                response = httpx.get(file_path, timeout=10)
                 response.raise_for_status()
                 image_data = response.content
             else:

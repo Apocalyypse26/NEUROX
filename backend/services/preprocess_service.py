@@ -90,6 +90,9 @@ class PreprocessService:
     async def _process_video(self, file_url: str) -> PreprocessResult:
         print("[PREPROCESS] Normalizing video...")
         
+        if not is_url_safe(file_url):
+            raise ValueError(f"URL not allowed for security reasons: {file_url}")
+        
         steps = [
             f"Downloaded video from {file_url}",
             "Normalizing aspect ratio to 16:9",

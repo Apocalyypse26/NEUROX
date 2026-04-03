@@ -1,7 +1,8 @@
 import os
+import time
 import jwt
 from typing import Optional
-from fastapi import HTTPException, Header, Depends
+from fastapi import HTTPException, Header
 
 class AuthService:
     def __init__(self):
@@ -87,8 +88,6 @@ class AuthService:
         Create a service-level JWT for internal use.
         Used by services to make authenticated requests to Supabase.
         """
-        import time
-        
         payload = {
             "sub": user_id,
             "role": "service_role" if is_admin else "authenticated",
