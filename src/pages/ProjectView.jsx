@@ -9,7 +9,7 @@ import MediaCard from '../components/MediaCard'
 import { 
   ChevronLeft, Upload, AlertCircle, 
   Lock, CreditCard, FolderOpen, X, Check, Loader2, Grid, List,
-  RefreshCw
+  RefreshCw, FileImageIcon
 } from 'lucide-react'
 import BoltIcon from '../components/BoltIcon'
 
