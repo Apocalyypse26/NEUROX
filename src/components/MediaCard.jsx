@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Film, FileImageIcon, Trash2, Zap, Play, AlertCircle } from 'lucide-react'
+import { Film, FileImageIcon, Trash2, Bolt, Play, AlertCircle } from 'lucide-react'
 import LazyImage from './LazyImage'
 
 export default function MediaCard({ 
@@ -96,7 +96,7 @@ export default function MediaCard({
             className="media-action analyze"
             onClick={(e) => hovered && onAnalyze && onAnalyze(upload)}
           >
-            <Zap size={18} />
+            <Bolt size={18} />
             <span>Analyze</span>
           </Link>
           <button 

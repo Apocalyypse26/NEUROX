@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import EvilEye from '../components/EvilEye';
 import '../../style.css';
 import { Link } from 'react-router-dom';
-import { Zap, Brain, Target, Shield, ChevronDown, Sparkles, TrendingUp, BookOpen } from 'lucide-react';
+import { Bolt, Brain, Target, Shield, ChevronDown, Sparkles, TrendingUp, BookOpen } from 'lucide-react';
 
 const AnimatedCounter = ({ end, duration = 2000, suffix = '' }) => {
   const [count, setCount] = useState(0);
@@ -80,7 +80,7 @@ export default function Home() {
 
   const features = [
     { icon: <Brain className="feature-svg" />, title: 'Neural Analysis', desc: 'Deep-learning models trained on viral meme patterns across all major platforms' },
-    { icon: <Zap className="feature-svg" />, title: 'Instant Scoring', desc: 'Real-time virality assessment in under 3 seconds with confidence metrics' },
+    { icon: <Bolt className="feature-svg" />, title: 'Instant Scoring', desc: 'Real-time virality assessment in under 3 seconds with confidence metrics' },
     { icon: <Target className="feature-svg" />, title: 'Platform Targeting', desc: 'AI-powered recommendations for X, Telegram, Instagram, and TikTok optimization' },
     { icon: <Shield className="feature-svg" />, title: 'Risk Assessment', desc: 'Detect shadowbans, algorithmic penalties, and content flagged for removal' },
   ];
@@ -201,7 +201,7 @@ export default function Home() {
             
             <div className="hero-cta">
               <Link to="/auth" className="btn-primary-large glow-button">
-                <Zap size={20} />
+                <Bolt size={20} />
                 Try Free Score
               </Link>
               <Link to="/auth" className="btn-secondary-large">
@@ -217,7 +217,7 @@ export default function Home() {
                 <Brain size={12} /> AI-Powered
               </span>
               <span className="trust-badge">
-                <Zap size={12} /> Instant
+                <Bolt size={12} /> Instant
               </span>
             </div>
           </div>
@@ -428,7 +428,7 @@ export default function Home() {
             <h2>Ready to Dominate?</h2>
             <p>Join thousands of operators maximizing their viral potential</p>
             <Link to="/auth" className="btn-cta-large">
-              <Zap size={24} />
+              <Bolt size={24} />
               Start Scoring Now
             </Link>
           </div>

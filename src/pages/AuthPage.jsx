@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { Mail, Shield, Zap, ArrowLeft, Loader2 } from 'lucide-react'
+import { Mail, Shield, Bolt, ArrowLeft, Loader2 } from 'lucide-react'
 
 const AnimatedInput = ({ type, placeholder, value, onChange, required }) => {
   const [focused, setFocused] = useState(false)
@@ -120,7 +120,7 @@ export default function AuthPage({ session }) {
                 </>
               ) : (
                 <>
-                  <Zap size={20} />
+                  <Bolt size={20} />
                   Transmit Magic Link
                 </>
               )}

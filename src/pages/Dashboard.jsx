@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Link, useNavigate } from 'react-router-dom'
 import { exportToJSON } from '../lib/utils'
-import { Folder, Plus, LogOut, Code, Shield, Zap, ChevronRight, FolderOpen, Clock, MoreVertical, Check, X, Download, Link as LinkIcon, Database, Trash2, Loader2 } from 'lucide-react'
+import { Folder, Plus, LogOut, Code, Shield, Bolt, ChevronRight, FolderOpen, Clock, MoreVertical, Check, X, Download, Link as LinkIcon, Database, Trash2, Loader2 } from 'lucide-react'
 import ConfirmModal from '../components/ConfirmModal'
 
 const ProjectCard = ({ project, index, onExport, onDelete }) => {
@@ -430,7 +430,7 @@ export default function Dashboard({ session }) {
                     </>
                   ) : (
                     <>
-                      <Zap size={18} />
+                      <Bolt size={18} />
                       Create Project
                     </>
                   )}
@@ -465,7 +465,7 @@ export default function Dashboard({ session }) {
 
             {credits !== null && credits <= 5 && (
               <div className="credits-warning">
-                <Zap size={14} />
+                <Bolt size={14} />
                 <span>Low credits! You have <strong>{credits}</strong> scan{credits !== 1 ? 's' : ''} remaining.</span>
               </div>
             )}

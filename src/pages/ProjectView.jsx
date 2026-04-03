@@ -9,7 +9,7 @@ import MediaCard from '../components/MediaCard'
 import { 
   ChevronLeft, Upload, AlertCircle, 
   Lock, CreditCard, FolderOpen, X, Check, Loader2, Grid, List,
-  RefreshCw
+  RefreshCw, Bolt
 } from 'lucide-react'
 
 const getVideoDuration = (file) => {
@@ -364,7 +364,7 @@ export default function ProjectView({ session }) {
             <RefreshCw size={16} />
           </button>
           <div className={`stat-pill credits ${credits === 0 ? 'danger' : ''}`}>
-            <Zap size={14} />
+            <Bolt size={14} />
             <span>SCANS:</span>
             {!creditsLoading ? (
               <strong>{credits !== null ? credits : '—'}</strong>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { createCheckoutSession, getPackages } from '../lib/api'
-import { CreditCard, Zap, Loader2, X, Check, Star } from 'lucide-react'
+import { CreditCard, Bolt, Loader2, X, Check, Star } from 'lucide-react'
 
 export default function StripeCheckout({ userId, email, onClose, onSuccess }) {
   const [packages, setPackages] = useState(null)
@@ -105,7 +105,7 @@ export default function StripeCheckout({ userId, email, onClose, onSuccess }) {
                     </div>
                     <p className="package-desc">{pkg.description}</p>
                     <div className="package-credits">
-                      <Zap size={14} />
+                      <Bolt size={14} />
                       {pkg.credits} scans included
                     </div>
                     <button
