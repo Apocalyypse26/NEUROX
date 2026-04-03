@@ -3,6 +3,8 @@ from .preprocess_service import preprocess_service, PreprocessService, Preproces
 from .ocr_service import ocr_service, OCRService, OCRResult
 from .score_mapper import score_mapper, ScoreMapper, NeuroMetrics
 from .job_manager import job_manager, JobManager, AnalysisJob, JobStatus
+from .auth_service import auth_service, AuthService
+from .admin_service import admin_service, AdminService
 
 __all__ = [
     "tribe_service",
@@ -21,5 +23,9 @@ __all__ = [
     "job_manager",
     "JobManager",
     "AnalysisJob",
-    "JobStatus"
+    "JobStatus",
+    "auth_service",
+    "AuthService",
+    "admin_service",
+    "AdminService"
 ]

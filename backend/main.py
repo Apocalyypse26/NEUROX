@@ -24,7 +24,9 @@ from services import (
     ocr_service,
     score_mapper,
     JobStatus,
-    USE_REAL_TRIBE
+    USE_REAL_TRIBE,
+    auth_service,
+    admin_service
 )
 from services.stripe_service import stripe_service, CREDIT_PACKAGES, SUBSCRIPTION_PLANS
 
@@ -490,6 +492,145 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
     except Exception as e:
         print(f"[WEBHOOK ERROR] {e}")
         raise HTTPException(status_code=400, detail="Webhook processing failed")
+
+
+# --- Admin Endpoints ---
+
+class AdminFeedbackRequest(BaseModel):
+    upload_id: str
+    feedback: str
+
+@app.get("/api/admin/verify")
+@limiter.limit("30/minute")
+async def verify_admin_status(request: Request):
+    """
+    Verify if the current user is an admin.
+    This endpoint requires a valid JWT token in the Authorization header.
+    """
+    try:
+        # Get user from JWT token
+        user = await auth_service.get_current_user(request.headers.get("authorization"))
+        user_id = user["user_id"]
+        
+        # Check if user is admin
+        is_admin = await admin_service.verify_admin(user_id)
+        
+        return {
+            "is_admin": is_admin,
+            "user_id": user_id
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ADMIN VERIFY ERROR] {e}")
+        raise HTTPException(status_code=500, detail="Failed to verify admin status")
+
+
+@app.get("/api/admin/uploads")
+@limiter.limit("30/minute")
+async def get_admin_uploads(request: Request):
+    """
+    Get all uploads for admin dashboard.
+    Requires admin privileges.
+    """
+    try:
+        # Verify admin
+        user = await auth_service.get_current_user(request.headers.get("authorization"))
+        if not await admin_service.verify_admin(user["user_id"]):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        # Get all uploads
+        uploads = await admin_service.get_all_uploads()
+        
+        return {
+            "uploads": uploads,
+            "count": len(uploads)
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ADMIN UPLOADS ERROR] {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch uploads")
+
+
+@app.post("/api/admin/feedback")
+@limiter.limit("30/minute")
+async def submit_admin_feedback(request: Request, req: AdminFeedbackRequest):
+    """
+    Submit admin feedback for an upload.
+    Requires admin privileges.
+    """
+    try:
+        # Verify admin
+        user = await auth_service.get_current_user(request.headers.get("authorization"))
+        if not await admin_service.verify_admin(user["user_id"]):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        # Update feedback
+        success = await admin_service.update_upload_feedback(req.upload_id, req.feedback)
+        
+        if success:
+            return {"success": True, "message": "Feedback submitted successfully"}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to submit feedback")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ADMIN FEEDBACK ERROR] {e}")
+        raise HTTPException(status_code=500, detail="Failed to submit feedback")
+
+
+@app.get("/api/admin/stats")
+@limiter.limit("30/minute")
+async def get_admin_stats(request: Request):
+    """
+    Get platform-wide statistics for admin dashboard.
+    Requires admin privileges.
+    """
+    try:
+        # Verify admin
+        user = await auth_service.get_current_user(request.headers.get("authorization"))
+        if not await admin_service.verify_admin(user["user_id"]):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        # Get stats
+        stats = await admin_service.get_upload_stats()
+        
+        return stats
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ADMIN STATS ERROR] {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch statistics")
+
+
+@app.get("/api/admin/upload/{upload_id}")
+@limiter.limit("30/minute")
+async def get_admin_upload(request: Request, upload_id: str):
+    """
+    Get a single upload by ID for admin view.
+    Requires admin privileges.
+    """
+    try:
+        # Verify admin
+        user = await auth_service.get_current_user(request.headers.get("authorization"))
+        if not await admin_service.verify_admin(user["user_id"]):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        # Get upload
+        upload = await admin_service.get_upload_by_id(upload_id)
+        
+        if upload:
+            return upload
+        else:
+            raise HTTPException(status_code=404, detail="Upload not found")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ADMIN GET UPLOAD ERROR] {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch upload")
 
 
 if __name__ == "__main__":

@@ -14,27 +14,70 @@ export default function AdminDashboard({ session }) {
   }, [])
 
   const checkAdminStatus = async () => {
-    const { data: adminData } = await supabase
-      .from('admin_users')
-      .select('id')
-      .eq('id', session.user.id)
-      .single()
-
-    if (adminData) {
-      setIsAdmin(true)
-      await fetchGlobalUploads()
+    try {
+      // Get current session
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session) {
+        console.log('No session found')
+        setLoading(false)
+        return
+      }
+      
+      // Call backend to verify admin status (with JWT authentication)
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${apiUrl}/api/admin/verify`, {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || 'Failed to verify admin status')
+      }
+      
+      const { is_admin } = await response.json()
+      
+      if (is_admin) {
+        setIsAdmin(true)
+        await fetchGlobalUploads()
+      }
+    } catch (error) {
+      console.error('Admin verification failed:', error)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const fetchGlobalUploads = async () => {
-    // Because of RLS, since we are admin, this pulls EVERYTHING.
-    const { data } = await supabase
-      .from('uploads')
-      .select('*, projects(name)')
-      .order('created_at', { ascending: false })
+    try {
+      // Get current session
+      const { data: { session } } = await supabase.auth.getSession()
       
-    if (data) setGlobalUploads(data)
+      if (!session) {
+        console.error('No session found')
+        return
+      }
+      
+      // Call backend to get all uploads (with JWT authentication)
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${apiUrl}/api/admin/uploads`, {
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || 'Failed to fetch uploads')
+      }
+      
+      const { uploads } = await response.json()
+      setGlobalUploads(uploads || [])
+    } catch (error) {
+      console.error('Failed to fetch uploads:', error)
+    }
   }
 
   const handleFeedbackChange = (id, val) => {
@@ -45,16 +88,39 @@ export default function AdminDashboard({ session }) {
     const feedback = feedbackInputs[id]
     if (!feedback) return
 
-    const { error } = await supabase
-      .from('uploads')
-      .update({ admin_feedback: feedback })
-      .eq('id', id)
+    try {
+      // Get current session
+      const { data: { session } } = await supabase.auth.getSession()
       
-    if (!error) {
-       // Re-sync local state to show it saved
-       setGlobalUploads(prev => prev.map(u => u.id === id ? { ...u, admin_feedback: feedback } : u))
-    } else {
-       console.error("Failed to commit feedback", error)
+      if (!session) {
+        console.error('No session found')
+        return
+      }
+      
+      // Call backend to submit feedback (with JWT authentication)
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${apiUrl}/api/admin/feedback`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          upload_id: id,
+          feedback: feedback
+        })
+      })
+      
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || 'Failed to submit feedback')
+      }
+      
+      // Re-sync local state to show it saved
+      setGlobalUploads(prev => prev.map(u => u.id === id ? { ...u, admin_feedback: feedback } : u))
+    } catch (error) {
+      console.error("Failed to commit feedback", error)
+      alert(`Failed to submit feedback: ${error.message}`)
     }
   }
 
