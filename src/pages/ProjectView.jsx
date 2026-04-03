@@ -4,9 +4,10 @@ import { supabase } from '../lib/supabase'
 import { useDropzone } from 'react-dropzone'
 import StripeCheckout from '../components/StripeCheckout'
 import ConfirmModal from '../components/ConfirmModal'
+import MediaCard from '../components/MediaCard'
 import { 
-  ChevronLeft, Upload, FileImageIcon, Film, Trash2, AlertCircle, 
-  Lock, CreditCard, FolderOpen, Zap, X, Check, Loader2, Grid, List,
+  ChevronLeft, Upload, AlertCircle, 
+  Lock, CreditCard, FolderOpen, X, Check, Loader2, Grid, List,
   RefreshCw
 } from 'lucide-react'
 
@@ -36,42 +37,6 @@ const UploadProgress = ({ file, progress, status }) => (
     <span className="progress-percent">{Math.round(progress)}%</span>
   </div>
 )
-
-const MediaCard = ({ upload, onDelete, onAnalyze }) => {
-  const [hovered, setHovered] = useState(false)
-  
-  return (
-    <div 
-      className="media-card"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      <div className="media-preview">
-        {upload.media_type === 'video' ? (
-          <video src={upload.file_url} muted preload="metadata" />
-        ) : (
-          <img src={upload.file_url} alt={upload.file_name} loading="lazy" />
-        )}
-        <div className="media-overlay">
-          <Link to={`/dashboard/analysis/${upload.id}`} className="media-action analyze">
-            <Zap size={18} />
-            Analyze
-          </Link>
-          <button onClick={() => onDelete(upload)} className="media-action delete">
-            <Trash2 size={18} />
-          </button>
-        </div>
-        <div className="media-type-badge">
-          {upload.media_type === 'video' ? <Film size={12} /> : <FileImageIcon size={12} />}
-        </div>
-      </div>
-      <div className="media-info">
-        <span className="media-name" title={upload.file_name}>{upload.file_name}</span>
-        <span className="media-size">{(upload.file_size / 1024 / 1024).toFixed(1)} MB</span>
-      </div>
-    </div>
-  )
-}
 
 export default function ProjectView({ session }) {
   const { projectId } = useParams()
@@ -516,6 +481,7 @@ export default function ProjectView({ session }) {
                     upload={u} 
                     onDelete={(upload) => setDeleteModal({ isOpen: true, upload })}
                     onAnalyze={() => {}}
+                    isDeleting={deletingUpload === u.id}
                   />
                 ))}
               </div>

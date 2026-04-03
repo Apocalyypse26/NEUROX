@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import LazyImage from '../components/LazyImage'
 import { Shield, Home, Target, ChevronRight, MessageSquare, ExternalLink, Loader2, RefreshCw, Send, AlertCircle } from 'lucide-react'
 
 const UploadCardSkeleton = () => (
@@ -239,9 +240,13 @@ export default function AdminDashboard({ session }) {
                 
                 <div className="upload-thumbnail">
                    {upload.media_type === 'video' ? (
-                     <video src={upload.file_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} muted loop />
+                     <video src={upload.file_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} muted loop preload="metadata" />
                    ) : (
-                     <img src={upload.file_url} style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'saturate(1.2)' }} alt="Upload" loading="lazy" />
+                     <LazyImage 
+                       src={upload.file_url} 
+                       style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'saturate(1.2)' }} 
+                       alt="Upload" 
+                     />
                    )}
                    <div className="media-badge">{upload.media_type.toUpperCase()}</div>
                 </div>

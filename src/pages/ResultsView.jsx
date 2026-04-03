@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { createAnalysisJob, getJobByUpload, pollJobUntilComplete, checkApiHealth, runSyncAnalysis } from '../lib/api'
 import { exportToJSON, shareToTwitter, shareToTelegram, generateShareableImage } from '../lib/utils'
+import LazyImage from '../components/LazyImage'
 import { 
   ChevronLeft, Target, AlertTriangle, CheckCircle, Zap, Eye, 
   Crosshair, Cpu, ThumbsUp, ThumbsDown, Send, Loader2, Share2,
@@ -399,10 +400,14 @@ export default function ResultsView({ session }) {
                   </>
                 ) : (
                   <div className="image-wrapper">
-                    <img 
+                    <LazyImage 
                       src={upload.file_url} 
                       alt="Analyzed Target"
-                      style={{ filter: filterStyles[imageFilter] }}
+                      style={{ 
+                        width: '100%', 
+                        height: '100%',
+                        filter: filterStyles[imageFilter]
+                      }}
                       className="media-element"
                     />
                     <div className="image-filters">
