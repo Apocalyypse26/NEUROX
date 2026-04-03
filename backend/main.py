@@ -12,6 +12,10 @@ import io
 import math
 import os
 import asyncio
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 from services import (
     job_manager,
