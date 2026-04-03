@@ -30,7 +30,7 @@ def is_url_safe(url: str) -> bool:
             return False
         
         hostname = parsed.hostname or ""
-        ip_address = parsed.hostname
+        netloc = parsed.netloc or ""
         
         if hostname.startswith("localhost") or hostname.startswith("127.") or hostname.startswith("0."):
             return False
@@ -40,17 +40,20 @@ def is_url_safe(url: str) -> bool:
             "172.23.", "172.24.", "172.25.", "172.26.", "172.27.", "172.28.", "172.29.", "172.30.",
             "172.31.", "192.168.", "169.254.", "fe80:", "fc00:", "fd00:", "ff00:"
         ]
+        
+        ip_part = netloc.split(":")[0]
+        import ipaddress
+        try:
+            ip = ipaddress.ip_address(ip_part)
+            if ip.is_private or ip.is_reserved or ip.is_loopback or ip.is_multicast:
+                return False
+            ip_address = str(ip)
+        except ValueError:
+            ip_address = hostname
+        
         for range_prefix in RESERVED_IP_RANGES:
             if ip_address.startswith(range_prefix):
                 return False
-        
-        import ipaddress
-        try:
-            ip = ipaddress.ip_address(ip_address)
-            if ip.is_private or ip.is_reserved or ip.is_loopback or ip.is_multicast:
-                return False
-        except ValueError:
-            pass
         
         domain = hostname.split(":")[0]
         if not any(domain.endswith(allowed) or domain == allowed for allowed in ALLOWED_SSRF_DOMAINS):

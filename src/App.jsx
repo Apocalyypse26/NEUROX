@@ -10,23 +10,24 @@ import Documentation from './pages/Documentation'
 import { ToastProvider } from './components/Toast'
 import '../style.css'
 
-let supabase = null;
-try {
-  const supabaseModule = await import('./lib/supabase');
-  supabase = supabaseModule.supabase;
-} catch (e) {
-  console.warn('Supabase not available:', e.message);
-}
-
 export default function App() {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [supabase, setSupabase] = useState(null)
   
   useEffect(() => {
-    if (!supabase) {
-      setLoading(false);
-      return;
-    }
+    import('./lib/supabase')
+      .then(module => {
+        setSupabase(module.supabase)
+      })
+      .catch(e => {
+        console.warn('Supabase not available:', e.message)
+        setLoading(false)
+      })
+  }, [])
+  
+  useEffect(() => {
+    if (!supabase) return
     
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
@@ -41,7 +42,7 @@ export default function App() {
     })
     
     return () => subscription?.unsubscribe()
-  }, [])
+  }, [supabase])
   
   const RequireAuth = ({ children }) => {
     if (loading) {

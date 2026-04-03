@@ -115,7 +115,7 @@ MAX_VIDEO_SIZE_MB = 25
 MAX_VIDEO_DURATION_SEC = 20
 MAX_FILES_PER_PROJECT = 10
 
-class AnalysisRequest(BaseModel):
+class JobRequestBase(BaseModel):
     upload_id: str
     user_id: str
     media_type: str
@@ -158,48 +158,11 @@ class AnalysisRequest(BaseModel):
             raise ValueError('file_url must be from an allowed domain (Supabase storage)')
         return v
 
-class CreateJobRequest(BaseModel):
-    upload_id: str
-    user_id: str
-    media_type: str
-    file_url: str
+class AnalysisRequest(JobRequestBase):
+    pass
 
-    @field_validator('upload_id')
-    @classmethod
-    def validate_upload_id(cls, v):
-        if not v or len(v) < 1 or len(v) > 255:
-            raise ValueError('Invalid upload_id length')
-        if not v.replace('-', '').replace('_', '').isalnum():
-            raise ValueError('upload_id contains invalid characters')
-        return v
-
-    @field_validator('user_id')
-    @classmethod
-    def validate_user_id(cls, v):
-        if not v or len(v) < 1:
-            raise ValueError('user_id is required')
-        return v
-
-    @field_validator('media_type')
-    @classmethod
-    def validate_media_type(cls, v):
-        allowed = ['image', 'video']
-        if v.lower() not in allowed:
-            raise ValueError(f'media_type must be one of: {", ".join(allowed)}')
-        return v.lower()
-
-    @field_validator('file_url')
-    @classmethod
-    def validate_file_url(cls, v):
-        if not v:
-            raise ValueError('file_url is required')
-        if len(v) > 2048:
-            raise ValueError('file_url exceeds maximum length')
-        if not v.startswith(('http://', 'https://')):
-            raise ValueError('file_url must be a valid HTTP(S) URL')
-        if not is_url_safe(v):
-            raise ValueError('file_url must be from an allowed domain (Supabase storage)')
-        return v
+class CreateJobRequest(JobRequestBase):
+    pass
 
 class FileValidationRequest(BaseModel):
     file_name: str

@@ -177,6 +177,20 @@ class JobManager:
         except Exception as e:
             print(f"[JOB_MANAGER] Warning: Exception persisting job {job.job_id}: {e}")
 
+    def _safe_persist_job(self, job: AnalysisJob, update_only: bool = False):
+        """Safely create a background task for persisting job with error handling"""
+        try:
+            task = asyncio.create_task(self._persist_job(job, update_only))
+            task.add_done_callback(
+                lambda t: (
+                    print(f"[JOB_MANAGER] Persist failed for job {job.job_id}: {t.exception()}")
+                    if t.cancelled() or t.exception()
+                    else None
+                )
+            )
+        except Exception as e:
+            print(f"[JOB_MANAGER] Warning: Failed to create persist task for job {job.job_id}: {e}")
+
     async def _cleanup_db_jobs(self):
         """Clean up old jobs in database"""
         if not self._db_enabled:
@@ -211,7 +225,7 @@ class JobManager:
         self.jobs[job_id] = job
         
         if self._db_enabled:
-            asyncio.create_task(self._persist_job(job))
+            self._safe_persist_job(job)
         
         print(f"[JOB_MANAGER] Created job {job_id} for upload {upload_id}")
         return job_id
@@ -247,7 +261,7 @@ class JobManager:
             job.progress = 10
             job.updated_at = time.time()
             if self._db_enabled:
-                asyncio.create_task(self._persist_job(job, update_only=True))
+                self._safe_persist_job(job, update_only=True)
             
             preprocess_result = await preprocess_func(job.file_url, job.media_type)
             print(f"[JOB_MANAGER] Preprocessing done: {preprocess_result.to_dict()}")
@@ -256,7 +270,7 @@ class JobManager:
             job.progress = 25
             job.updated_at = time.time()
             if self._db_enabled:
-                asyncio.create_task(self._persist_job(job, update_only=True))
+                self._safe_persist_job(job, update_only=True)
             
             ocr_result = await ocr_func(job.file_url, job.media_type)
             print(f"[JOB_MANAGER] OCR done: {ocr_result.to_dict()}")
@@ -265,7 +279,7 @@ class JobManager:
             job.progress = 50
             job.updated_at = time.time()
             if self._db_enabled:
-                asyncio.create_task(self._persist_job(job, update_only=True))
+                self._safe_persist_job(job, update_only=True)
             
             seed = sum(ord(c) for c in job.upload_id)
             tribe_output = await tribe_func(job.file_url, job.media_type, seed)
@@ -278,7 +292,7 @@ class JobManager:
             job.progress = 75
             job.updated_at = time.time()
             if self._db_enabled:
-                asyncio.create_task(self._persist_job(job, update_only=True))
+                self._safe_persist_job(job, update_only=True)
             
             neuro_metrics = score_mapper_func(tribe_output)
             final_result = neuro_metrics.to_neurox_format()
@@ -288,7 +302,7 @@ class JobManager:
             job.progress = 100
             job.updated_at = time.time()
             if self._db_enabled:
-                asyncio.create_task(self._persist_job(job, update_only=True))
+                self._safe_persist_job(job, update_only=True)
             
             print(f"[JOB_MANAGER] Job {job_id} completed with score {final_result['globalScore']}")
             return final_result
@@ -298,7 +312,7 @@ class JobManager:
             job.error = str(e)
             job.updated_at = time.time()
             if self._db_enabled:
-                asyncio.create_task(self._persist_job(job, update_only=True))
+                self._safe_persist_job(job, update_only=True)
             print(f"[JOB_MANAGER] Job {job_id} failed: {e}")
             raise
 

@@ -221,15 +221,15 @@ export function subscribeToJob(jobId, options = {}) {
   } = options;
   
   let url = `${API_BASE_URL}/api/jobs/${jobId}/stream`;
+  const params = [];
+  
+  if (jobToken) {
+    params.push(`token=${encodeURIComponent(jobToken)}`);
+  }
+  
   let eventSource;
   let retryCount = 0;
   const maxRetries = 5;
-  
-  const headers = {};
-  
-  if (jobToken) {
-    url += `?token=${encodeURIComponent(jobToken)}`;
-  }
   
   const getBackoffDelay = (attempt) => {
     const delay = Math.min(1000 * Math.pow(2, attempt), 30000);
@@ -239,10 +239,11 @@ export function subscribeToJob(jobId, options = {}) {
   const connect = async () => {
     const authToken = await getAuthToken();
     if (authToken && !jobToken) {
-      headers['Authorization'] = `Bearer ${authToken}`;
+      params.push(`auth=${encodeURIComponent(authToken)}`);
     }
     
-    eventSource = new EventSource(url);
+    const fullUrl = params.length > 0 ? `${url}?${params.join('&')}` : url;
+    eventSource = new EventSource(fullUrl);
     
     eventSource.onmessage = (event) => {
       try {

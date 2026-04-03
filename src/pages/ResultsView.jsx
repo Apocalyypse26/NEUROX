@@ -98,7 +98,7 @@ export default function ResultsView({ session }) {
   const [jobProgress, setJobProgress] = useState(0)
   const [showShareMenu, setShowShareMenu] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [sseSubscription, setSseSubscription] = useState(null)
+  const sseRef = useRef(null)
   const videoRef = useRef(null)
   const timelineRef = useRef(null)
 
@@ -107,8 +107,9 @@ export default function ResultsView({ session }) {
     setMounted(true)
     
     return () => {
-      if (sseSubscription) {
-        sseSubscription.close();
+      if (sseRef.current) {
+        sseRef.current.close();
+        sseRef.current = null;
       }
     };
   }, [uploadId])
@@ -239,7 +240,7 @@ export default function ResultsView({ session }) {
         }
       });
 
-      setSseSubscription(sseSubscription);
+      sseRef.current = sseSubscription;
 
     } catch (err) {
       console.error("[ANALYSIS] Error:", err);
