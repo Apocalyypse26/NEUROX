@@ -20,7 +20,20 @@ export async function createAnalysisJob(uploadId, mediaType, fileUrl) {
     throw new Error(error.detail || `HTTP ${response.status}`);
   }
   
-  return response.json();
+  const result = await response.json();
+  
+  const tokenResponse = await fetch(`${API_BASE_URL}/api/jobs/${result.job_id}/token`, {
+    headers: { 
+      'Authorization': `Bearer ${await getAuthToken()}`
+    }
+  });
+  
+  if (tokenResponse.ok) {
+    const tokenData = await tokenResponse.json();
+    result.job_token = tokenData.token;
+  }
+  
+  return result;
 }
 
 export async function getJobStatus(jobId) {
@@ -194,4 +207,83 @@ export async function getAuthToken() {
   } catch {
     return '';
   }
+}
+
+// --- SSE Functions ---
+
+export function subscribeToJob(jobId, options = {}) {
+  const {
+    onStatusUpdate,
+    onProgress,
+    onComplete,
+    onError,
+    jobToken = null
+  } = options;
+  
+  let url = `${API_BASE_URL}/api/jobs/${jobId}/stream`;
+  let eventSource;
+  
+  const headers = {};
+  
+  if (jobToken) {
+    url += `?token=${encodeURIComponent(jobToken)}`;
+  }
+  
+  const connect = async () => {
+    const authToken = await getAuthToken();
+    if (authToken && !jobToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+    
+    eventSource = new EventSource(url);
+    
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        if (data.error) {
+          onError?.(data.error);
+          eventSource.close();
+          return;
+        }
+        
+        if (data.type === 'done') {
+          eventSource.close();
+          return;
+        }
+        
+        onStatusUpdate?.(data);
+        onProgress?.(data.progress, data.status);
+        
+        if (data.status === 'completed') {
+          onComplete?.(data.result);
+          eventSource.close();
+        } else if (data.status === 'failed') {
+          onError?.(data.error || 'Analysis failed');
+          eventSource.close();
+        }
+      } catch (e) {
+        console.error('SSE parse error:', e);
+      }
+    };
+    
+    eventSource.onerror = (error) => {
+      console.error('SSE error:', error);
+      eventSource.close();
+      
+      setTimeout(() => {
+        connect();
+      }, 2000);
+    };
+  };
+  
+  connect();
+  
+  return {
+    close: () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+    }
+  };
 }

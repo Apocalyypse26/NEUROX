@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { createAnalysisJob, getJobByUpload, pollJobUntilComplete, checkApiHealth, runSyncAnalysis } from '../lib/api'
+import { createAnalysisJob, getJobByUpload, checkApiHealth, subscribeToJob } from '../lib/api'
 import { exportToJSON, shareToTwitter, shareToTelegram, generateShareableImage } from '../lib/utils'
 import LazyImage from '../components/LazyImage'
 import { 
@@ -97,12 +97,19 @@ export default function ResultsView({ session }) {
   const [jobProgress, setJobProgress] = useState(0)
   const [showShareMenu, setShowShareMenu] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [sseSubscription, setSseSubscription] = useState(null)
   const videoRef = useRef(null)
   const timelineRef = useRef(null)
 
   useEffect(() => {
     fetchUpload()
     setMounted(true)
+    
+    return () => {
+      if (sseSubscription) {
+        sseSubscription.close();
+      }
+    };
   }, [uploadId])
 
   const fetchUpload = async () => {
@@ -167,6 +174,7 @@ export default function ResultsView({ session }) {
 
       const existingJob = await getJobByUpload(targetData.id);
       let jobId;
+      let jobToken = null;
 
       if (existingJob && existingJob.status === 'completed') {
         console.log("[ANALYSIS] Using cached result");
@@ -183,26 +191,55 @@ export default function ResultsView({ session }) {
         jobId = existingJob.job_id;
         setAnalysisStatus('polling');
         console.log("[ANALYSIS] Resuming existing job:", jobId);
+        
+        const { subscribeToJob: getToken } = await import('../lib/api');
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.access_token) {
+            const tokenRes = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/jobs/${jobId}/token`, {
+              headers: { 'Authorization': `Bearer ${session.access_token}` }
+            });
+            if (tokenRes.ok) {
+              const tokenData = await tokenRes.json();
+              jobToken = tokenData.token;
+            }
+          }
+        } catch (e) {
+          console.log("[ANALYSIS] Could not get job token for resume");
+        }
       } else {
         setAnalysisStatus('creating');
         const job = await createAnalysisJob(targetData.id, targetData.media_type, targetData.file_url);
         jobId = job.job_id;
+        jobToken = job.job_token;
         setAnalysisStatus('polling');
         console.log("[ANALYSIS] Created new job:", jobId);
       }
 
-      const result = await pollJobUntilComplete(jobId, (job) => {
-        console.log(`[ANALYSIS] Job progress: ${job.progress}% - ${job.status}`);
-        setAnalysisStatus(job.status);
-        setJobProgress(job.progress);
+      const sseSubscription = subscribeToJob(jobId, {
+        jobToken: jobToken,
+        onStatusUpdate: (job) => {
+          console.log(`[ANALYSIS] Job progress: ${job.progress}% - ${job.status}`);
+          setAnalysisStatus(job.status);
+          setJobProgress(job.progress);
+        },
+        onComplete: async (result) => {
+          console.log("[ANALYSIS] Analysis complete:", result);
+          setAnalysisData(result);
+          setAnalysisStatus('complete');
+          
+          await supabase.from('uploads').update({ score_data: result }).eq('id', targetData.id);
+          setLoading(false);
+        },
+        onError: (error) => {
+          console.error("[ANALYSIS] Error:", error);
+          setServerError(error || "Analysis failed. Please try again.");
+          setLoading(false);
+        }
       });
 
-      console.log("[ANALYSIS] Analysis complete:", result);
-      setAnalysisData(result);
-      setAnalysisStatus('complete');
+      setSseSubscription(sseSubscription);
 
-      await supabase.from('uploads').update({ score_data: result }).eq('id', targetData.id);
-      
     } catch (err) {
       console.error("[ANALYSIS] Error:", err);
       setServerError(err.message || JSON.stringify(err) || "Analysis failed. Please try again.");

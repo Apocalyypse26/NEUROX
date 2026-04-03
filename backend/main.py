@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import Response
+from starlette.responses import Response, StreamingResponse
 from pydantic import BaseModel, field_validator
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -23,6 +23,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 import httpx
 from PIL import Image
 import io
+import json
 import math
 import os
 import asyncio
@@ -395,6 +396,100 @@ async def get_job_status(request: Request, job_id: str):
         raise HTTPException(status_code=404, detail="Job not found")
     
     return job.to_dict()
+
+
+@app.get("/api/jobs/{job_id}/stream")
+async def stream_job_status(request: Request, job_id: str, token: str = None):
+    """
+    SSE endpoint for real-time job status updates.
+    Requires authentication via token or job_token for reconnects.
+    """
+    user_id = None
+    
+    if token:
+        job_token = auth_service.verify_job_token(token)
+        if job_token and job_token.get("job_id") == job_id:
+            user_id = job_token.get("user_id")
+        else:
+            user_id = auth_service.get_user_id_from_token(f"Bearer {token}")
+    
+    if not user_id:
+        auth_header = request.headers.get("authorization", "")
+        user_id = auth_service.get_user_id_from_token(auth_header)
+    
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    async def event_generator():
+        last_status = None
+        last_progress = None
+        check_count = 0
+        
+        while check_count < 600:
+            if await request.is_disconnected():
+                break
+            
+            job = job_manager.get_job(job_id)
+            
+            if not job:
+                yield f"data: {{\"error\": \"Job not found\", \"type\": \"error\"}}\n\n"
+                break
+            
+            job_dict = job.to_dict()
+            
+            if job.status.value != last_status or job.progress != last_progress:
+                yield f"data: {json.dumps(job_dict)}\n\n"
+                last_status = job.status.value
+                last_progress = job.progress
+            
+            if job.status in [JobStatus.COMPLETED, JobStatus.FAILED]:
+                yield f"data: {json.dumps({**job_dict, 'type': job.status.value})}\n\n"
+                break
+            
+            check_count += 1
+            await asyncio.sleep(0.5)
+        
+        yield f"data: {{\"type\": \"done\", \"reason\": \"timeout\"}}\n\n"
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
+
+
+@app.get("/api/jobs/{job_id}/token")
+@limiter.limit("60/minute")
+async def get_job_token(request: Request, job_id: str):
+    """
+    Get a short-lived token for SSE reconnection.
+    Allows reconnection without full re-authentication.
+    """
+    auth_header = request.headers.get("authorization", "")
+    user_id = auth_service.get_user_id_from_token(auth_header)
+    
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    job = job_manager.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    if job.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to access this job")
+    
+    job_token = auth_service.create_job_token(job_id, user_id, expires_in=3600)
+    
+    return {
+        "job_id": job_id,
+        "token": job_token,
+        "expires_in": 3600
+    }
+
 
 @app.get("/api/jobs/upload/{upload_id}")
 @limiter.limit("30/minute")

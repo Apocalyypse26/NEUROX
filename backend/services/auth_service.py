@@ -98,6 +98,46 @@ class AuthService:
         }
         
         return jwt.encode(payload, self.supabase_jwt_secret, algorithm="HS256")
+    
+    def create_job_token(self, job_id: str, user_id: str, expires_in: int = 3600) -> str:
+        """
+        Create a short-lived token for job SSE access.
+        Used for SSE reconnects without full re-authentication.
+        """
+        payload = {
+            "job_id": job_id,
+            "user_id": user_id,
+            "iat": int(time.time()),
+            "exp": int(time.time()) + expires_in,
+            "type": "job_token"
+        }
+        
+        return jwt.encode(payload, self.supabase_jwt_secret, algorithm="HS256")
+    
+    def verify_job_token(self, token: str) -> Optional[dict]:
+        """
+        Verify a short-lived job token.
+        Returns the decoded payload if valid, None otherwise.
+        """
+        try:
+            decoded = jwt.decode(
+                token,
+                self.supabase_jwt_secret,
+                algorithms=["HS256"],
+                options={
+                    "verify_signature": True,
+                    "verify_exp": True
+                }
+            )
+            
+            if decoded.get("type") != "job_token":
+                return None
+            
+            return decoded
+        except jwt.ExpiredSignatureError:
+            return None
+        except jwt.InvalidTokenError:
+            return None
 
 # Global instance
 auth_service = AuthService()
