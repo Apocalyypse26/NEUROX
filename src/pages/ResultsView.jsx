@@ -359,7 +359,11 @@ export default function ResultsView({ session }) {
           <AlertTriangle size={48} />
         </div>
         <h2>Edge Function Fault</h2>
-        <pre>{serverError}</pre>
+        <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+          {serverError.replace(/[&<>"']/g, (m) => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+          }[m]))}
+        </pre>
         <Link to="/dashboard" className="error-btn">Abort to Dashboard</Link>
       </div>
     )

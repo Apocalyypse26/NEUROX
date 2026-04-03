@@ -331,7 +331,7 @@ export default function ProjectView({ session }) {
       setUploading(false)
       setUploadProgress([])
     }, 1500)
-  }, [projectId, session, uploads.length])
+  }, [projectId, session, uploads])
 
   const { getRootProps, getInputProps, isDragActive: isDropzoneActive } = useDropzone({ 
     onDrop,
