@@ -12,6 +12,7 @@ import {
   RefreshCw, FileImageIcon
 } from 'lucide-react'
 import BoltIcon from '../components/BoltIcon'
+import { SkeletonGallery, SkeletonText } from '../components/SkeletonScreens'
 
 const getVideoDuration = (file) => {
   return new Promise((resolve) => {
@@ -488,9 +489,11 @@ export default function ProjectView({ session }) {
             </div>
 
             {loading ? (
-              <div className="gallery-loading">
-                <Loader2 size={32} className="spin" />
-                <span>Compiling visual intelligence...</span>
+              <div style={{ padding: '2rem' }}>
+                <SkeletonGallery count={6} />
+                <div style={{ marginTop: '2rem' }}>
+                  <SkeletonText lines={2} delay={2} />
+                </div>
               </div>
             ) : uploads.length === 0 ? (
               <div className="gallery-empty">

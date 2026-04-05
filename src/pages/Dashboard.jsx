@@ -5,6 +5,7 @@ import { exportToJSON } from '../lib/utils'
 import { Folder, Plus, LogOut, Code, Shield, ChevronRight, FolderOpen, Clock, MoreVertical, Check, X, Download, Link as LinkIcon, Database, Trash2, Loader2 } from 'lucide-react'
 import BoltIcon from '../components/BoltIcon'
 import ConfirmModal from '../components/ConfirmModal'
+import { SkeletonDashboardCards, SkeletonText, SkeletonAvatar } from '../components/SkeletonScreens'
 
 const ProjectCard = ({ project, index, onExport, onDelete }) => {
   const [hovered, setHovered] = useState(false)
@@ -104,24 +105,6 @@ const ProjectCard = ({ project, index, onExport, onDelete }) => {
         <div className="project-glow" />
       </div>
     </Link>
-  )
-}
-
-const LoadingSkeleton = ({ type = 'card' }) => {
-  if (type === 'card') {
-    return (
-      <div className="skeleton-card">
-        <div className="skeleton-icon"></div>
-        <div className="skeleton-title"></div>
-        <div className="skeleton-meta"></div>
-      </div>
-    )
-  }
-  return (
-    <div className="skeleton-badge">
-      <div className="skeleton-badge-icon"></div>
-      <div className="skeleton-badge-text"></div>
-    </div>
   )
 }
 
@@ -372,11 +355,7 @@ export default function Dashboard({ session }) {
             </div>
 
             {loading ? (
-              <div className="projects-grid">
-                {[1, 2, 3].map(i => (
-                  <LoadingSkeleton key={i} type="card" />
-                ))}
-              </div>
+              <SkeletonDashboardCards count={3} />
             ) : projects.length === 0 ? (
               <div className="empty-state">
                 <div className="empty-icon">

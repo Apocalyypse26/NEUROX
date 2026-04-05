@@ -5,6 +5,7 @@ import { createAnalysisJob, getJobByUpload, checkApiHealth, subscribeToJob } fro
 import { exportToJSON, shareToTwitter, shareToTelegram, generateShareableImage } from '../lib/utils'
 import LazyImage from '../components/LazyImage'
 import BoltIcon from '../components/BoltIcon'
+import { SkeletonScoreCard, SkeletonProgressBar, SkeletonMediaCard, SkeletonText, SkeletonAvatar } from '../components/SkeletonScreens'
 import { 
   ChevronLeft, Target, AlertTriangle, CheckCircle, Eye, 
   Crosshair, Cpu, ThumbsUp, ThumbsDown, Send, Loader2, Share2,
@@ -323,12 +324,40 @@ export default function ResultsView({ session }) {
     
     return (
       <div className="results-loading">
-        <div className="loading-animation">
-          <div className="loading-ring" />
-          <div className="loading-ring" />
-          <div className="loading-ring" />
-          <Target size={40} className="loading-icon" />
+        {/* Skeleton Layout Preview - shows what results will look like */}
+        <div className="skeleton-preview" style={{ 
+          display: 'grid', 
+          gridTemplateColumns: '400px 1fr', 
+          gap: '2rem',
+          maxWidth: '1200px',
+          margin: '0 auto',
+          padding: '2rem',
+          width: '100%'
+        }}>
+          {/* Media Skeleton */}
+          <div className="skeleton-media-section">
+            <SkeletonMediaCard delay={1} />
+            <div style={{ marginTop: '1rem' }}>
+              <SkeletonText lines={2} delay={2} />
+            </div>
+          </div>
+          
+          {/* Score Skeleton */}
+          <div className="skeleton-score-section">
+            <SkeletonScoreCard size="large" delay={1} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '1rem' }}>
+              <SkeletonProgressBar delay={2} />
+              <SkeletonProgressBar delay={3} />
+              <SkeletonProgressBar delay={4} />
+              <SkeletonProgressBar delay={5} />
+            </div>
+            <div style={{ marginTop: '1rem' }}>
+              <SkeletonText lines={3} delay={3} />
+            </div>
+          </div>
         </div>
+        
+        {/* Analysis Status Overlay */}
         <div className="analysis-status-container">
           <div className="status-indicator">
             <Activity size={16} className="status-icon pulse" />
@@ -1363,6 +1392,32 @@ export default function ResultsView({ session }) {
 
         .results-loading p {
           color: var(--color-text-muted);
+        }
+
+        /* Skeleton Preview Layout */
+        .skeleton-preview {
+          animation: fadeIn 0.3s ease;
+        }
+
+        .skeleton-media-section {
+          display: flex;
+          flex-direction: column;
+        }
+
+        .skeleton-score-section {
+          display: flex;
+          flex-direction: column;
+        }
+
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 1024px) {
+          .skeleton-preview {
+            grid-template-columns: 1fr !important;
+          }
         }
 
         .error-icon {
