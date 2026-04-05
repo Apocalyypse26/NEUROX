@@ -447,8 +447,8 @@ export default function Home() {
           <p className="footer-copy">© 2026 NEUROX Protocol. All systems operational.</p>
           <div className="footer-links">
             <Link to="/docs">Documentation</Link>
-            <a href="#">X / Twitter</a>
-            <a href="#">Telegram</a>
+            <a href="https://x.com/NEUROOXX" target="_blank" rel="noopener noreferrer">X / Twitter</a>
+            <a href="https://t.me/NEEUROX" target="_blank" rel="noopener noreferrer">Telegram</a>
           </div>
         </div>
       </footer>
