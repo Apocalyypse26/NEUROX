@@ -56,6 +56,18 @@ export default function App() {
     return children
   }
 
+  const RequireAdmin = ({ children }) => {
+    if (loading) {
+      return (
+        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#050010' }}>
+          <h2 style={{ color: '#FF6F37', fontFamily: 'monospace' }}>LOADING...</h2>
+        </div>
+      )
+    }
+    if (!session) return <Navigate to="/auth" replace />
+    return children
+  }
+
   return (
     <ToastProvider>
       <Routes>

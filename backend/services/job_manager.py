@@ -67,10 +67,10 @@ class JobManager:
         
         print(f"[JOB_MANAGER] Initialized (cleanup every {self._cleanup_interval}s, max age {self._max_job_age}s)")
 
-    def start(self):
+    async def start(self):
         """Call this from lifespan to initialize async tasks after event loop exists"""
         if self._db_enabled:
-            asyncio.create_task(self._load_jobs_from_db())
+            await self._load_jobs_from_db()
         self.start_cleanup_scheduler()
 
     def start_cleanup_scheduler(self):
@@ -322,6 +322,13 @@ class JobManager:
             job.updated_at = time.time()
             if self._db_enabled:
                 self._safe_persist_job(job, update_only=True)
+            
+            # Clean up temp files from preprocessing
+            if hasattr(preprocess_result, 'cleanup'):
+                preprocess_result.cleanup()
+            
+            # Clean up cached media
+            await media_cache.cleanup_file(media_path)
             
             print(f"[JOB_MANAGER] Job {job_id} completed with score {final_result['globalScore']}")
             return final_result

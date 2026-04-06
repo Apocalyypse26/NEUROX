@@ -36,7 +36,16 @@ class MediaCache:
         self._cache[url] = (data, cache_path)
         return data, cache_path
     
-    def cleanup(self):
+    async def cleanup_file(self, path: str):
+        """Clean up a specific cached file"""
+        if path and os.path.exists(path):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+    
+    def cleanup_all(self):
+        """Clean up entire cache"""
         import shutil
         shutil.rmtree(self.temp_dir, ignore_errors=True)
         self._cache.clear()

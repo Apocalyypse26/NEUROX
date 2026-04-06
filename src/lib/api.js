@@ -7,7 +7,10 @@ const MAX_POLL_ATTEMPTS = 60;
 export async function createAnalysisJob(uploadId, mediaType, fileUrl) {
   const response = await fetch(`${API_BASE_URL}/api/jobs/create`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${await getAuthToken()}`
+    },
     body: JSON.stringify({
       upload_id: uploadId,
       media_type: mediaType,
@@ -149,7 +152,10 @@ export async function createCheckoutSession(packageId, userId, email) {
 
   const response = await fetch(`${API_BASE_URL}/api/checkout`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${await getAuthToken()}`
+    },
     body: JSON.stringify({
       package_id: packageId,
       user_id: userId,

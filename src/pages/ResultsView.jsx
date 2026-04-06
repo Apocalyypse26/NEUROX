@@ -132,21 +132,6 @@ export default function ResultsView({ session }) {
 
   const executeAnalysisHook = async (targetData) => {
     try {
-      const { data: hasCredits, error: rpcError } = await supabase.rpc('consume_credit')
-      
-      if (rpcError) {
-        console.error("[CREDITS] RPC error:", rpcError)
-        setLoading(false)
-        setServerError(`Credit check failed: ${rpcError.message}. Please refresh and try again.`)
-        return
-      }
-
-      if (!hasCredits) {
-        setLoading(false)
-        setServerError("INSUFFICIENT SCAN CREDITS. You have no credits remaining. Go to the Dashboard to purchase more.")
-        return
-      }
-
       const apiHealth = await checkApiHealth();
       
       if (!apiHealth) {

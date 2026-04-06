@@ -3,6 +3,7 @@ import math
 import random
 import numpy as np
 import httpx
+import asyncio
 from typing import Dict, List, Optional, Any
 import google.generativeai as genai
 from PIL import Image
@@ -197,8 +198,8 @@ class TribeService:
             IMPORTANT: Use the following OCR text as reference for text analysis: "{ocr_text}"
             """
             
-            # Generate content with Gemini
-            response = GEMINI_MODEL.generate_content([prompt, image])
+            # Generate content with Gemini - run in thread to avoid blocking event loop
+            response = await asyncio.to_thread(GEMINI_MODEL.generate_content, [prompt, image])
             response_text = response.text
             
             # Parse JSON response (handle potential formatting issues)

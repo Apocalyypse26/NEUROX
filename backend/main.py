@@ -19,6 +19,19 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; font-src 'self'"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         return response
+
+class RequestSizeMiddleware(BaseHTTPMiddleware):
+    MAX_BODY_SIZE = 10 * 1024 * 1024  # 10MB
+
+    async def dispatch(self, request: Request, call_next):
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > self.MAX_BODY_SIZE:
+            return Response(status_code=413, content="Request body too large")
+        body = await request.body()
+        if len(body) > self.MAX_BODY_SIZE:
+            return Response(status_code=413, content="Request body too large")
+        response = await call_next(request)
+        return response
 import httpx
 from PIL import Image
 import io
@@ -75,7 +88,7 @@ async def lifespan(app: FastAPI):
         print("[STARTUP] WARNING: SUPABASE_JWT_SECRET is not configured! Authentication will fail.")
         print("[STARTUP] Set your Supabase JWT secret from: Project Settings -> API -> JWT Secret")
     
-    job_manager.start()
+    await job_manager.start()
     yield
     print("[SHUTDOWN] Cleaning up...")
     job_manager.stop_cleanup_scheduler()
@@ -85,6 +98,7 @@ app = FastAPI(title="NEUROX API", version="2.0.0", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
+app.add_middleware(RequestSizeMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 
 def get_cors_origins() -> list[str]:
@@ -322,6 +336,12 @@ async def validate_video(request: Request, video_req: VideoValidationRequest):
 @app.post("/api/jobs/create")
 @user_limiter.limit("10/minute")
 async def create_analysis_job(request: Request, req: CreateJobRequest):
+    auth_header = request.headers.get("authorization", "")
+    auth_user_id = auth_service.get_user_id_from_token(auth_header)
+    
+    if auth_user_id and auth_user_id != req.user_id:
+        raise HTTPException(status_code=403, detail="User ID mismatch")
+    
     existing_job = job_manager.get_job_by_upload(req.upload_id)
     if existing_job and existing_job.status == JobStatus.COMPLETED:
         return {
@@ -338,6 +358,30 @@ async def create_analysis_job(request: Request, req: CreateJobRequest):
             "progress": existing_job.progress,
             "message": "Existing job found"
         }
+    
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            supabase_url = os.getenv("SUPABASE_URL", "")
+            supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+            response = await client.post(
+                f"{supabase_url}/rest/v1/rpc/consume_credit",
+                headers={
+                    "apikey": supabase_key,
+                    "Authorization": f"Bearer {supabase_key}",
+                    "Content-Type": "application/json"
+                },
+                json={}
+            )
+            if response.status_code == 200:
+                has_credits = response.json()
+            else:
+                has_credits = True
+    except Exception as e:
+        print(f"[CREDITS] Failed to check credits: {e}")
+        has_credits = True
+    
+    if not has_credits:
+        raise HTTPException(status_code=402, detail="Insufficient credits. Please purchase more scans.")
     
     job_id = job_manager.create_job(req.upload_id, req.user_id, req.media_type, req.file_url)
     

@@ -2,6 +2,7 @@ import io
 import os
 import tempfile
 import subprocess
+import shutil
 from typing import Optional, Tuple, List
 from PIL import Image
 import httpx
@@ -15,13 +16,25 @@ class PreprocessResult:
                  num_frames: int,
                  resolution: Tuple[int, int],
                  preprocessing_steps: list,
-                 frame_paths: Optional[List[str]] = None):
+                 frame_paths: Optional[List[str]] = None,
+                 temp_files: Optional[List[str]] = None):
         self.processed_path = processed_path
         self.duration_seconds = duration_seconds
         self.num_frames = num_frames
         self.resolution = resolution
         self.preprocessing_steps = preprocessing_steps
         self.frame_paths = frame_paths or []
+        self.temp_files = temp_files or []
+
+    def cleanup(self):
+        """Clean up all temporary files created during processing"""
+        for path in self.temp_files:
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except Exception:
+                pass
+        self.temp_files.clear()
 
     def to_dict(self):
         return {
@@ -108,6 +121,8 @@ class PreprocessService:
             if not is_url_safe(file_path):
                 raise ValueError(f"URL not allowed: {file_path}")
         
+        temp_files_to_cleanup = []
+        
         try:
             if is_http:
                 async def _download():
@@ -122,7 +137,10 @@ class PreprocessService:
                     video_data = f.read()
             
             # Save to temp file
-            temp_path = os.path.join(self.temp_dir, f"video_{hash(file_path)}.mp4")
+            fd, temp_path = tempfile.mkstemp(suffix=".mp4", prefix="neurox_video_")
+            os.close(fd)
+            temp_files_to_cleanup.append(temp_path)
+            
             with open(temp_path, 'wb') as f:
                 f.write(video_data)
             
@@ -151,6 +169,7 @@ class PreprocessService:
             
             # Extract key frames for analysis
             frame_paths = self._extract_key_frames(temp_path, num_frames_to_extract=8)
+            temp_files_to_cleanup.extend(frame_paths)
             
             steps = [
                 f"{'Downloaded' if is_http else 'Loaded'} video from {file_path}",
@@ -160,8 +179,9 @@ class PreprocessService:
                 f"Extracted {len(frame_paths)} key frames"
             ]
             
-            # Clean up video file
-            os.remove(temp_path)
+            # Clean up video file (frames tracked for later cleanup)
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
             
             return PreprocessResult(
                 processed_path=frame_paths[0] if frame_paths else file_path,
@@ -169,17 +189,26 @@ class PreprocessService:
                 num_frames=num_frames,
                 resolution=(width, height),
                 preprocessing_steps=steps,
-                frame_paths=frame_paths
+                frame_paths=frame_paths,
+                temp_files=temp_files_to_cleanup
             )
             
         except Exception as e:
             print(f"[PREPROCESS] Video processing failed: {e}")
+            # Clean up any temp files on error
+            for path in temp_files_to_cleanup:
+                try:
+                    if os.path.exists(path):
+                        os.remove(path)
+                except Exception:
+                    pass
             return PreprocessResult(
                 processed_path=file_path,
                 duration_seconds=15.0,
                 num_frames=60,
                 resolution=(720, 1280),
-                preprocessing_steps=[f"Error: {str(e)}"]
+                preprocessing_steps=[f"Error: {str(e)}"],
+                temp_files=temp_files_to_cleanup
             )
 
     def _extract_key_frames(self, video_path: str, num_frames_to_extract: int = 8) -> List[str]:
@@ -206,7 +235,8 @@ class PreprocessService:
         
         for i in range(1, num_frames_to_extract + 1):
             timestamp = i * interval
-            frame_path = os.path.join(self.temp_dir, f"frame_{i}.jpg")
+            fd, frame_path = tempfile.mkstemp(suffix=".jpg", prefix=f"neurox_frame_{i}_")
+            os.close(fd)
             
             try:
                 subprocess.run(
@@ -216,9 +246,15 @@ class PreprocessService:
                 
                 if os.path.exists(frame_path):
                     frame_paths.append(frame_path)
+                else:
+                    os.unlink(frame_path)
                     
             except Exception as e:
                 print(f"[PREPROCESS] Failed to extract frame at {timestamp}s: {e}")
+                try:
+                    os.unlink(frame_path)
+                except Exception:
+                    pass
         
         return frame_paths
 
