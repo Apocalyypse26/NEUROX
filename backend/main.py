@@ -126,7 +126,7 @@ def get_cors_origins() -> list[str]:
     if not cors_config:
         if env == "production":
             raise ValueError("CORS_ORIGINS must be configured in production")
-        print("[CORS] WARNING: No CORS_ORIGINS configured - defaulting to localhost only")
+        logger.warning("No CORS_ORIGINS configured - defaulting to localhost only")
         return ["http://localhost:5173", "http://127.0.0.1:5173"]
     
     origins = [o.strip() for o in cors_config.split(",") if o.strip()]
@@ -348,12 +348,12 @@ async def validate_video(request: Request, video_req: VideoValidationRequest):
     Checks duration, codec, and basic integrity.
     This is a server-side validation to prevent users from bypassing limits.
     """
-    print(f"[VIDEO_VALIDATION] Validating video: {video_req.file_url}")
+    logger.info("Validating video: %s", video_req.file_url)
     
     result = validate_video_url(video_req.file_url, video_req.max_duration)
     
     if not result.valid:
-        print(f"[VIDEO_VALIDATION] Validation failed: {result.errors}")
+        logger.warning("Video validation failed: %s", result.errors)
         raise HTTPException(
             status_code=400,
             detail={
@@ -363,7 +363,7 @@ async def validate_video(request: Request, video_req: VideoValidationRequest):
             }
         )
     
-    print(f"[VIDEO_VALIDATION] Validation passed: duration={result.duration}s, codec={result.codec}")
+    logger.info("Video validation passed: duration=%ss, codec=%s", result.duration, result.codec)
     
     return {
         "valid": True,
@@ -419,7 +419,7 @@ async def create_analysis_job(request: Request, req: CreateJobRequest):
             else:
                 has_credits = True
     except Exception as e:
-        print(f"[CREDITS] Failed to check credits: {e}")
+        logger.error("Failed to check credits: %s", e)
         has_credits = True
     
     if not has_credits:
@@ -437,7 +437,7 @@ async def create_analysis_job(request: Request, req: CreateJobRequest):
         )
     )
     task.add_done_callback(
-        lambda t: print(f"[JOB_MANAGER] Background task {job_id} failed: {t.exception()}")
+        lambda t: logger.error("Background task %s failed: %s", job_id, t.exception())
         if t.exception() else None
     )
     
@@ -572,7 +572,7 @@ async def analyze_target(request: Request, req: AnalysisRequest):
         )
         return result
     except Exception as e:
-        print(f"[ERROR] Analysis failed: {e}")
+        logger.error("Analysis failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/analyze-sync")
@@ -600,7 +600,7 @@ async def analyze_sync(request: Request, req: AnalysisRequest):
                 raise HTTPException(status_code=404, detail="File not found at provided URL")
             raise HTTPException(status_code=502, detail="Failed to fetch media file")
         except Exception as e:
-            print(f"[ERROR] Failed to process image: {e}")
+            logger.error("Failed to process image: %s", e)
             raise HTTPException(status_code=422, detail="Failed to process media file")
 
     global_score = min(max(int(60 + (seeded_random(seed, 1) * 38) + brightness_modifier), 0), 100)
@@ -751,7 +751,7 @@ async def create_checkout(request: Request, req: CheckoutRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"[CHECKOUT ERROR] {e}")
+        logger.error("Checkout error: %s", e)
         raise HTTPException(status_code=500, detail="Failed to create checkout session")
 
 
@@ -764,7 +764,7 @@ async def get_checkout_status(request: Request, session_id: str):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"[CHECKOUT STATUS ERROR] {e}")
+        logger.error("Checkout status error: %s", e)
         raise HTTPException(status_code=500, detail="Failed to retrieve checkout status")
 
 
@@ -773,13 +773,12 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
     try:
         payload = await request.body()
         result = await stripe_service.handle_webhook_async(payload, stripe_signature)
-        print(f"[WEBHOOK] Processed: {result}")
-        return {"received": True, "result": result}
+        logger.info("Webhook processed: %s", result)
     except ValueError as e:
-        print(f"[WEBHOOK ERROR] {e}")
+        logger.error("Webhook error: %s", e)
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"[WEBHOOK ERROR] {e}")
+        logger.error("Webhook error: %s", e)
         raise HTTPException(status_code=400, detail="Webhook processing failed")
 
 
@@ -811,7 +810,7 @@ async def verify_admin_status(request: Request):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[ADMIN VERIFY ERROR] {e}")
+        logger.error("Admin verify error: %s", e)
         raise HTTPException(status_code=500, detail="Failed to verify admin status")
 
 
@@ -914,7 +913,7 @@ async def get_admin_stats(request: Request):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[ADMIN STATS ERROR] {e}")
+        logger.error("Admin stats error: %s", e)
         raise HTTPException(status_code=500, detail="Failed to fetch statistics")
 
 
@@ -942,7 +941,7 @@ async def get_admin_upload(request: Request, upload_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[ADMIN GET UPLOAD ERROR] {e}")
+        logger.error("Admin get upload error: %s", e)
         raise HTTPException(status_code=500, detail="Failed to fetch upload")
 
 
