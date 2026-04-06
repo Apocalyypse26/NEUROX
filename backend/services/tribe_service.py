@@ -5,14 +5,14 @@ import numpy as np
 import httpx
 import asyncio
 from typing import Dict, List, Optional, Any
-from google import genai
-from google.genai import types
+from openai import AsyncOpenAI
 from PIL import Image
 from io import BytesIO
 import base64
 from urllib.parse import urlparse
 import logging
-import traceback
+import json
+import re
 from .retry import retry_with_backoff
 
 logger = logging.getLogger("neurox.tribe")
@@ -70,12 +70,12 @@ def is_url_safe(url: str) -> bool:
     except Exception:
         return False
 
-# Initialize Gemini if API key is available
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-if GEMINI_API_KEY:
-    GEMINI_CLIENT = genai.Client(api_key=GEMINI_API_KEY)
+# Initialize OpenAI if API key is available
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if OPENAI_API_KEY:
+    OPENAI_CLIENT = AsyncOpenAI(api_key=OPENAI_API_KEY)
 else:
-    GEMINI_CLIENT = None
+    OPENAI_CLIENT = None
 
 def seeded_random(seed: int, offset: int) -> float:
     x = math.sin(seed + offset) * 10000
@@ -127,22 +127,22 @@ class TribeService:
         logger.info("Initialized in %s mode", 'REAL' if self.use_real else 'MOCK')
 
     async def analyze(self, file_path: str, media_type: str, seed: int, ocr_text: str = "") -> TribeOutput:
-        if GEMINI_CLIENT:
-            return await self._analyze_with_gemini(file_path, media_type, seed, ocr_text)
+        if OPENAI_CLIENT:
+            return await self._analyze_with_gpt4o(file_path, media_type, seed, ocr_text)
         elif self.use_real:
             return await self._analyze_real(file_path, media_type, seed, ocr_text)
         else:
             return await self._analyze_mock(media_type, seed)
 
     async def _analyze_real(self, file_path: str, media_type: str, seed: int, ocr_text: str = "") -> TribeOutput:
-        if GEMINI_CLIENT:
-            return await self._analyze_with_gemini(file_path, media_type, seed, ocr_text)
+        if OPENAI_CLIENT:
+            return await self._analyze_with_gpt4o(file_path, media_type, seed, ocr_text)
         else:
-            logger.warning("No Gemini API available, falling back to mock")
+            logger.warning("No OpenAI API available, falling back to mock")
             return await self._analyze_mock(media_type, seed)
 
-    async def _analyze_with_gemini(self, file_path: str, media_type: str, seed: int, ocr_text: str = "") -> TribeOutput:
-        logger.info("Gemini analysis for: %s", file_path)
+    async def _analyze_with_gpt4o(self, file_path: str, media_type: str, seed: int, ocr_text: str = "") -> TribeOutput:
+        logger.info("GPT-4o Vision analysis for: %s", file_path)
         
         try:
             image_data = None
@@ -172,6 +172,7 @@ class TribeService:
             
             buffered = BytesIO()
             image.save(buffered, format="JPEG")
+            base64_image = base64.b64encode(buffered.getvalue()).decode("utf-8")
             
             prompt = f"""
             Analyze this image for viral potential and meme characteristics. Provide:
@@ -195,28 +196,37 @@ class TribeService:
             IMPORTANT: Use the following OCR text as reference for text analysis: "{ocr_text}"
             """
             
-            response = await asyncio.to_thread(
-                GEMINI_CLIENT.models.generate_content,
-                model="gemini-2.0-flash",
-                contents=[
-                    prompt,
-                    types.Part.from_bytes(data=buffered.getvalue(), mime_type="image/jpeg")
-                ]
+            response = await OPENAI_CLIENT.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{base64_image}",
+                                    "detail": "high"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                max_tokens=1024,
+                temperature=0.3
             )
-            response_text = response.text
-            
-            import json
-            import re
+            response_text = response.choices[0].message.content
             
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
                 try:
                     result = json.loads(json_match.group())
                 except json.JSONDecodeError:
-                    logger.warning("Failed to parse Gemini JSON response, falling back to mock")
+                    logger.warning("Failed to parse GPT-4o JSON response, falling back to mock")
                     return await self._analyze_mock(media_type, seed)
             else:
-                logger.warning("No JSON found in Gemini response, falling back to mock")
+                logger.warning("No JSON found in GPT-4o response, falling back to mock")
                 return await self._analyze_mock(media_type, seed)
             
             global_score = max(0, min(100, int(result.get('globalScore', 50))))
@@ -313,17 +323,17 @@ class TribeService:
                     "media_type": media_type,
                     "num_frames": num_frames,
                     "seed": seed,
-                    "mode": "gemini",
+                    "mode": "gpt4o",
                     "globalScore": global_score
                 }
             )
             
         except Exception as e:
-            logger.error("Error in Gemini analysis: %s", e)
+            logger.error("Error in GPT-4o analysis: %s", e)
             return await self._analyze_mock(media_type, seed)
 
     async def _analyze_mock(self, media_type: str, seed: int) -> TribeOutput:
-        print(f"[TRIBE] Mock analysis for media_type: {media_type}, seed: {seed}")
+        logger.info("Mock analysis for media_type: %s, seed: %s", media_type, seed)
         
         num_frames = 30 if media_type == "image" else 60
         
@@ -368,7 +378,7 @@ class TribeService:
                          "diamond", "hands", "flippening", "ser", "fren", "doge", "shib", "btc", 
                          "eth", "sol", "bnb", "defi", "nft", "token", "coin", "chart", "buy"]
         ocr_texts = [
-            "TO THE MOON 🚀",
+            "TO THE MOON",
             "HODL THE LINE",
             "BUY THE DIP",
             "WAGMI",
