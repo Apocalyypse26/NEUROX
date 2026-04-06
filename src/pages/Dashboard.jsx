@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { verifyAndCredit } from '../lib/api'
 import { Link, useNavigate } from 'react-router-dom'
 import { exportToJSON } from '../lib/utils'
+import { logger } from '../lib/logger'
 import { Folder, Plus, LogOut, Code, Shield, ChevronRight, FolderOpen, Clock, MoreVertical, Check, X, Download, Link as LinkIcon, Database, Trash2, Loader2 } from 'lucide-react'
 import BoltIcon from '../components/BoltIcon'
 import ConfirmModal from '../components/ConfirmModal'
@@ -153,7 +154,7 @@ export default function Dashboard({ session }) {
         showToast('Payment verification failed. Please contact support.', 'error')
       }
     } catch (err) {
-      console.error('Payment verification error:', err)
+      logger.error('Payment verification error:', err)
       showToast('Payment verification failed. Please contact support.', 'error')
     }
   }
@@ -186,12 +187,12 @@ export default function Dashboard({ session }) {
         .single()
       
       if (error) {
-        console.error('Error fetching credits:', error)
+        logger.error('Error fetching credits:', error)
       } else if (data) {
         setCredits(data.credits)
       }
     } catch (err) {
-      console.error('Failed to fetch credits:', err)
+      logger.error('Failed to fetch credits:', err)
     } finally {
       setLoadingCredits(false)
     }
@@ -206,13 +207,13 @@ export default function Dashboard({ session }) {
       
       if (error) {
         showToast('Failed to load projects. Please refresh the page.', 'error')
-        console.error('Error fetching projects:', error)
+        logger.error('Error fetching projects:', error)
       } else {
         setProjects(data || [])
       }
     } catch (err) {
       showToast('Network error loading projects. Please try again.', 'error')
-      console.error('Failed to fetch projects:', err)
+      logger.error('Failed to fetch projects:', err)
     } finally {
       setLoading(false)
     }
@@ -220,7 +221,16 @@ export default function Dashboard({ session }) {
 
   const handleCreateProject = async (e) => {
     e.preventDefault()
-    if (!newProjectName.trim()) return
+    const trimmedName = newProjectName.trim()
+    if (!trimmedName) return
+    if (trimmedName.length > 100) {
+      showToast('Project name must be 100 characters or less.', 'error')
+      return
+    }
+    if (!/^[a-zA-Z0-9_\- ]+$/.test(trimmedName)) {
+      showToast('Project name can only contain letters, numbers, spaces, hyphens, and underscores.', 'error')
+      return
+    }
     setIsCreating(true)
     
     try {
@@ -231,7 +241,7 @@ export default function Dashboard({ session }) {
       
       if (error) {
         showToast('Failed to create project. Please try again.', 'error')
-        console.error('Error creating project:', error)
+        logger.error('Error creating project:', error)
       } else if (data) {
         showToast('Project created successfully!', 'success')
         setProjects([data[0], ...projects])
@@ -240,7 +250,7 @@ export default function Dashboard({ session }) {
       }
     } catch (err) {
       showToast('Network error creating project. Please try again.', 'error')
-      console.error('Failed to create project:', err)
+      logger.error('Failed to create project:', err)
     } finally {
       setIsCreating(false)
     }
@@ -257,7 +267,7 @@ export default function Dashboard({ session }) {
         .eq('project_id', deleteModal.project.id)
 
       if (uploadError) {
-        console.error('Error deleting uploads:', uploadError)
+        logger.error('Error deleting uploads:', uploadError)
       }
 
       const { error: projectError } = await supabase
@@ -267,14 +277,14 @@ export default function Dashboard({ session }) {
 
       if (projectError) {
         showToast('Failed to delete project. Please try again.', 'error')
-        console.error('Error deleting project:', projectError)
+        logger.error('Error deleting project:', projectError)
       } else {
         setProjects(projects.filter(p => p.id !== deleteModal.project.id))
         showToast('Project deleted successfully', 'success')
       }
     } catch (err) {
       showToast('Network error deleting project. Please try again.', 'error')
-      console.error('Failed to delete project:', err)
+      logger.error('Failed to delete project:', err)
     } finally {
       setDeletingProject(null)
     }
@@ -303,7 +313,7 @@ export default function Dashboard({ session }) {
       showToast('Project exported successfully!', 'success')
     } catch (err) {
       showToast('Failed to export project. Please try again.', 'error')
-      console.error('Failed to export project:', err)
+      logger.error('Failed to export project:', err)
     }
   }
 

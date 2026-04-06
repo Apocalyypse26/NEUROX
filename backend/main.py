@@ -19,6 +19,14 @@ logging.basicConfig(
 logger = logging.getLogger("neurox")
 
 
+def api_error(status_code: int, message: str, code: str = "API_ERROR", field: str | None = None):
+    """Return a standardized JSON error response."""
+    detail = {"code": code, "message": message}
+    if field:
+        detail["field"] = field
+    raise HTTPException(status_code=status_code, detail=detail)
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response: Response = await call_next(request)
@@ -107,7 +115,7 @@ async def lifespan(app: FastAPI):
     yield
     logger.info("Shutting down...")
     job_manager.stop_cleanup_scheduler()
-    job_manager.cleanup_old_jobs(0)
+    await job_manager.cleanup_old_jobs(0)
 
 app = FastAPI(title="NEUROX API", version="2.0.0", lifespan=lifespan)
 app.state.limiter = limiter
@@ -145,10 +153,10 @@ app.add_middleware(
 
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 ALLOWED_VIDEO_TYPES = {"video/mp4", "video/webm"}
-MAX_IMAGE_SIZE_MB = 8
-MAX_VIDEO_SIZE_MB = 25
-MAX_VIDEO_DURATION_SEC = 20
-MAX_FILES_PER_PROJECT = 10
+MAX_IMAGE_SIZE_MB = int(os.getenv("MAX_IMAGE_SIZE_MB", "8"))
+MAX_VIDEO_SIZE_MB = int(os.getenv("MAX_VIDEO_SIZE_MB", "25"))
+MAX_VIDEO_DURATION_SEC = int(os.getenv("MAX_VIDEO_DURATION_SEC", "20"))
+MAX_FILES_PER_PROJECT = int(os.getenv("MAX_FILES_PER_PROJECT", "10"))
 
 class JobRequestBase(BaseModel):
     upload_id: str
@@ -321,7 +329,7 @@ async def validate_upload(request: Request, validation: FileValidationRequest):
             errors.append(f'Video size exceeds {MAX_VIDEO_SIZE_MB}MB limit')
 
     if errors:
-        raise HTTPException(status_code=400, detail={"errors": errors})
+        api_error(400, "; ".join(errors), code="VALIDATION_ERROR")
 
     return {"valid": True, "message": "File validation passed"}
 
@@ -330,8 +338,8 @@ async def validate_upload(request: Request, validation: FileValidationRequest):
 async def validate_project_files(request: Request, data: dict):
     current_count = data.get("current_file_count", 0)
     if current_count >= MAX_FILES_PER_PROJECT:
-        raise HTTPException(
-            status_code=400,
+        api_error(
+            400,
             detail=f"Project already has maximum of {MAX_FILES_PER_PROJECT} files"
         )
     return {"valid": True, "remaining_slots": MAX_FILES_PER_PROJECT - current_count}
@@ -379,7 +387,7 @@ async def create_analysis_job(request: Request, req: CreateJobRequest):
     auth_user_id = auth_service.get_user_id_from_token(auth_header)
     
     if auth_user_id and auth_user_id != req.user_id:
-        raise HTTPException(status_code=403, detail="User ID mismatch")
+        api_error(403, "User ID mismatch", code="AUTH_ERROR")
     
     existing_job = job_manager.get_job_by_upload(req.upload_id)
     if existing_job and existing_job.status == JobStatus.COMPLETED:
@@ -420,9 +428,19 @@ async def create_analysis_job(request: Request, req: CreateJobRequest):
         has_credits = False
     
     if not has_credits:
-        raise HTTPException(status_code=402, detail="Insufficient credits. Please purchase more scans.")
+        api_error(402, "Insufficient credits. Please purchase more scans.", code="INSUFFICIENT_CREDITS")
     
-    job_id = job_manager.create_job(req.upload_id, req.user_id, req.media_type, req.file_url)
+    job_id = await job_manager.create_job(req.upload_id, req.user_id, req.media_type, req.file_url)
+    
+    existing_job = job_manager.get_job(job_id)
+    if existing_job and existing_job.status in (JobStatus.COMPLETED, JobStatus.PREPROCESSING, JobStatus.OCR_EXTRACTING, JobStatus.TRIBE_ANALYZING, JobStatus.MAPPING_SCORES):
+        return {
+            "job_id": job_id,
+            "status": existing_job.status.value,
+            "message": "Existing job found",
+            "progress": existing_job.progress,
+            "result": existing_job.result if existing_job.status == JobStatus.COMPLETED else None
+        }
     
     task = asyncio.create_task(
         job_manager.run_job(
@@ -449,7 +467,7 @@ async def create_analysis_job(request: Request, req: CreateJobRequest):
 async def get_job_status(request: Request, job_id: str):
     job = job_manager.get_job(job_id)
     if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
+        api_error(404, "Job not found", code="NOT_FOUND")
     
     return job.to_dict()
 
@@ -563,25 +581,14 @@ async def analyze_target(request: Request, req: AnalysisRequest):
     if auth_user_id and auth_user_id != req.user_id:
         raise HTTPException(status_code=403, detail="User ID mismatch")
     
-    # Check for existing job to prevent duplicates
-    existing_job = job_manager.get_job_by_upload(req.upload_id)
+    job_id = await job_manager.create_job(req.upload_id, req.user_id, req.media_type, req.file_url)
+    
+    existing_job = job_manager.get_job(job_id)
     if existing_job and existing_job.status == JobStatus.COMPLETED:
-        return {
-            "job_id": existing_job.job_id,
-            "status": existing_job.status.value,
-            "message": "Analysis already completed",
-            "result": existing_job.result
-        }
+        return existing_job.result
     
-    if existing_job:
-        return {
-            "job_id": existing_job.job_id,
-            "status": existing_job.status.value,
-            "progress": existing_job.progress,
-            "message": "Existing job found"
-        }
-    
-    job_id = job_manager.create_job(req.upload_id, req.user_id, req.media_type, req.file_url)
+    if existing_job and existing_job.status != JobStatus.PENDING:
+        raise HTTPException(status_code=409, detail="Job already in progress")
     
     try:
         result = await job_manager.run_job(
@@ -943,6 +950,24 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None))
 class AdminFeedbackRequest(BaseModel):
     upload_id: str
     feedback: str
+
+    @field_validator('upload_id')
+    @classmethod
+    def validate_upload_id(cls, v):
+        if not v or not v.strip():
+            raise ValueError('upload_id is required')
+        if len(v) > 255:
+            raise ValueError('upload_id exceeds maximum length of 255')
+        return v.strip()
+
+    @field_validator('feedback')
+    @classmethod
+    def validate_feedback(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Feedback cannot be empty')
+        if len(v) > 2000:
+            raise ValueError('Feedback exceeds 2000 character limit')
+        return v.strip()
 
 @app.get("/api/admin/verify")
 @limiter.limit("30/minute")

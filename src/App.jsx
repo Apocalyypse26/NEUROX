@@ -9,26 +9,18 @@ import AdminDashboard from './pages/AdminDashboard'
 import Documentation from './pages/Documentation'
 import ErrorBoundary from './components/ErrorBoundary'
 import { ToastProvider } from './components/Toast'
+import { supabase } from './lib/supabase'
 import '../style.css'
 
 export default function App() {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [supabase, setSupabase] = useState(null)
   
   useEffect(() => {
-    import('./lib/supabase')
-      .then(module => {
-        setSupabase(module.supabase)
-      })
-      .catch(e => {
-        console.warn('Supabase not available:', e.message)
-        setLoading(false)
-      })
-  }, [])
-  
-  useEffect(() => {
-    if (!supabase) return
+    if (!supabase) {
+      setLoading(false)
+      return
+    }
     
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
@@ -43,7 +35,7 @@ export default function App() {
     })
     
     return () => subscription?.unsubscribe()
-  }, [supabase])
+  }, [])
   
   const RequireAuth = ({ children }) => {
     if (loading) {

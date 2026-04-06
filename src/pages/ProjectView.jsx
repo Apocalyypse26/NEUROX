@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { validateVideo, verifyAndCredit } from '../lib/api'
 import { useDropzone } from 'react-dropzone'
+import { logger } from '../lib/logger'
 import StripeCheckout from '../components/StripeCheckout'
 import ConfirmModal from '../components/ConfirmModal'
 import MediaCard from '../components/MediaCard'
@@ -99,7 +100,7 @@ export default function ProjectView({ session }) {
         setErrorMsg('Payment verification failed. Please contact support.')
       }
     } catch (err) {
-      console.error('Payment verification error:', err)
+      logger.error('Payment verification error:', err)
       setErrorMsg('Payment verification failed. Please contact support.')
     }
   }
@@ -114,12 +115,12 @@ export default function ProjectView({ session }) {
         .single()
       
       if (error) {
-        console.error('Error fetching profile:', error)
+        logger.error('Error fetching profile:', error)
       } else if (data) {
         setCredits(data.credits)
       }
     } catch (err) {
-      console.error('Failed to fetch profile:', err)
+      logger.error('Failed to fetch profile:', err)
     } finally {
       setCreditsLoading(false)
     }
@@ -141,13 +142,13 @@ export default function ProjectView({ session }) {
       const { data, error } = await supabase.from('projects').select('*').eq('id', projectId).single()
       if (error) {
         showToast('Failed to load project. Please try again.', 'error')
-        console.error('Error fetching project:', error)
+        logger.error('Error fetching project:', error)
       } else {
         setProject(data)
       }
     } catch (err) {
       showToast('Network error loading project.', 'error')
-      console.error('Failed to fetch project:', err)
+      logger.error('Failed to fetch project:', err)
     }
   }
 
@@ -161,13 +162,13 @@ export default function ProjectView({ session }) {
       
       if (error) {
         showToast('Failed to load uploads. Please try again.', 'error')
-        console.error('Error fetching uploads:', error)
+        logger.error('Error fetching uploads:', error)
       } else {
         setUploads(data || [])
       }
     } catch (err) {
       showToast('Network error loading uploads.', 'error')
-      console.error('Failed to fetch uploads:', err)
+      logger.error('Failed to fetch uploads:', err)
     } finally {
       setLoading(false)
     }
@@ -192,7 +193,7 @@ export default function ProjectView({ session }) {
         .remove([fileName])
 
       if (storageError) {
-        console.error('Error deleting file from storage:', storageError)
+        logger.error('Error deleting file from storage:', storageError)
       }
 
       const { error: dbError } = await supabase
@@ -202,14 +203,14 @@ export default function ProjectView({ session }) {
 
       if (dbError) {
         showToast('Failed to delete file. Please try again.', 'error')
-        console.error('Error deleting upload:', dbError)
+        logger.error('Error deleting upload:', dbError)
       } else {
         setUploads(uploads.filter(u => u.id !== deleteModal.upload.id))
         showToast('File deleted successfully', 'success')
       }
     } catch (err) {
       showToast('Network error deleting file.', 'error')
-      console.error('Failed to delete upload:', err)
+      logger.error('Failed to delete upload:', err)
     } finally {
       setDeletingUpload(null)
     }
@@ -264,7 +265,7 @@ export default function ProjectView({ session }) {
             continue
           }
         } catch (err) {
-          console.error('Error checking video duration:', err)
+          logger.error('Error checking video duration:', err)
         }
       }
 
@@ -305,7 +306,7 @@ export default function ProjectView({ session }) {
             p.file === file ? { ...p, progress: 75 } : p
           ))
         } catch (validationError) {
-          console.error('Video validation failed:', validationError)
+          logger.error('Video validation failed:', validationError)
           
           await supabase.storage.from('project_files').remove([safeName])
           

@@ -1,5 +1,6 @@
 import React from 'react'
 import { AlertTriangle, Loader2, Trash2 } from 'lucide-react'
+import { logger } from '../lib/logger'
 
 export default function ConfirmModal({ 
   isOpen, 
@@ -19,7 +20,7 @@ export default function ConfirmModal({
       await onConfirm()
       onClose()
     } catch (error) {
-      console.error('Confirm action failed:', error)
+      logger.error('Confirm action failed:', error)
     }
   }
 

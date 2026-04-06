@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { createAnalysisJob, getJobByUpload, checkApiHealth, subscribeToJob } from '../lib/api'
 import { exportToJSON, shareToTwitter, shareToTelegram, generateShareableImage } from '../lib/utils'
+import { logger } from '../lib/logger'
 import LazyImage from '../components/LazyImage'
 import BoltIcon from '../components/BoltIcon'
 import { SkeletonScoreCard, SkeletonProgressBar, SkeletonMediaCard, SkeletonText, SkeletonAvatar } from '../components/SkeletonScreens'
@@ -135,13 +136,13 @@ export default function ResultsView({ session }) {
       const apiHealth = await checkApiHealth();
       
       if (!apiHealth) {
-        console.error("[ANALYSIS] Backend unavailable");
+        logger.error("[ANALYSIS] Backend unavailable");
         setServerError("NEUROX backend is currently unavailable. Please try again in a few moments.");
         setLoading(false);
         return;
       }
 
-      console.log("[ANALYSIS] Starting TRIBE analysis pipeline...");
+      logger.debug("[ANALYSIS] Starting TRIBE analysis pipeline...");
       setAnalysisStatus('preparing');
 
       const existingJob = await getJobByUpload(targetData.id);
@@ -149,7 +150,7 @@ export default function ResultsView({ session }) {
       let jobToken = null;
 
       if (existingJob && existingJob.status === 'completed') {
-        console.log("[ANALYSIS] Using cached result");
+        logger.debug("[ANALYSIS] Using cached result");
         const result = existingJob.result;
         setAnalysisData(result);
         setAnalysisStatus('complete');
@@ -162,9 +163,7 @@ export default function ResultsView({ session }) {
       if (existingJob && existingJob.status !== 'failed') {
         jobId = existingJob.job_id;
         setAnalysisStatus('polling');
-        console.log("[ANALYSIS] Resuming existing job:", jobId);
         
-        const { subscribeToJob: getToken } = await import('../lib/api');
         try {
           const { data: { session } } = await supabase.auth.getSession();
           if (session?.access_token) {
@@ -177,7 +176,7 @@ export default function ResultsView({ session }) {
             }
           }
         } catch (e) {
-          console.log("[ANALYSIS] Could not get job token for resume");
+          // Could not get job token for resume
         }
       } else {
         setAnalysisStatus('creating');
@@ -185,18 +184,18 @@ export default function ResultsView({ session }) {
         jobId = job.job_id;
         jobToken = job.job_token;
         setAnalysisStatus('polling');
-        console.log("[ANALYSIS] Created new job:", jobId);
+        logger.debug("[ANALYSIS] Created new job:", jobId);
       }
 
       const sseSubscription = subscribeToJob(jobId, {
         jobToken: jobToken,
         onStatusUpdate: (job) => {
-          console.log(`[ANALYSIS] Job progress: ${job.progress}% - ${job.status}`);
+          logger.debug(`[ANALYSIS] Job progress: ${job.progress}% - ${job.status}`);
           setAnalysisStatus(job.status);
           setJobProgress(job.progress);
         },
         onComplete: async (result) => {
-          console.log("[ANALYSIS] Analysis complete:", result);
+          logger.debug("[ANALYSIS] Analysis complete:", result);
           setAnalysisData(result);
           setAnalysisStatus('complete');
           
@@ -204,7 +203,7 @@ export default function ResultsView({ session }) {
           setLoading(false);
         },
         onError: (error) => {
-          console.error("[ANALYSIS] Error:", error);
+          logger.error("[ANALYSIS] Error:", error);
           setServerError(error || "Analysis failed. Please try again.");
           setLoading(false);
         }
@@ -213,7 +212,7 @@ export default function ResultsView({ session }) {
       sseRef.current = sseSubscription;
 
     } catch (err) {
-      console.error("[ANALYSIS] Error:", err);
+      logger.error("[ANALYSIS] Error:", err);
       setServerError(err.message || JSON.stringify(err) || "Analysis failed. Please try again.");
     } finally {
       setLoading(false);
@@ -222,7 +221,11 @@ export default function ResultsView({ session }) {
 
   const submitFeedback = async () => {
     if (!feedbackSentiment) return
-    const payload = { sentiment: feedbackSentiment, note: feedbackNote }
+    const trimmedNote = feedbackNote?.trim() || ''
+    if (trimmedNote.length > 1000) {
+      return
+    }
+    const payload = { sentiment: feedbackSentiment, note: trimmedNote }
     
     setFeedbackSubmitted(true)
     const { error } = await supabase
@@ -231,7 +234,7 @@ export default function ResultsView({ session }) {
       .eq('id', uploadId)
       
     if (error) {
-      console.error("Failed to submit telemetry feedback", error)
+      logger.error("Failed to submit telemetry feedback", error)
       setFeedbackSubmitted(false)
     }
   }
@@ -567,7 +570,7 @@ export default function ResultsView({ session }) {
                     </button>
                   </div>
                   
-                  {feedbackSentiment && (
+                   {feedbackSentiment && (
                     <div className="feedback-form">
                       <input 
                         type="text" 
@@ -575,6 +578,7 @@ export default function ResultsView({ session }) {
                         value={feedbackNote}
                         onChange={e => setFeedbackNote(e.target.value)}
                         className="feedback-input"
+                        maxLength={1000}
                       />
                       <button onClick={submitFeedback} className="submit-btn">
                         <Send size={18} />

@@ -56,8 +56,13 @@ class JobManager:
         self.jobs: Dict[str, AnalysisJob] = {}
         self._running_tasks: Dict[str, asyncio.Task] = {}
         self._cleanup_task: Optional[asyncio.Task] = None
+        self._lock = asyncio.Lock()
         self._cleanup_interval = int(os.getenv("JOB_CLEANUP_INTERVAL_SECONDS", "300"))
         self._max_job_age = int(os.getenv("MAX_JOB_AGE_SECONDS", "3600"))
+        self._download_timeout = float(os.getenv("MEDIA_DOWNLOAD_TIMEOUT", "30"))
+        self._preprocess_timeout = float(os.getenv("PREPROCESS_TIMEOUT", "60"))
+        self._ocr_timeout = float(os.getenv("OCR_TIMEOUT", "120"))
+        self._tribe_timeout = float(os.getenv("TRIBE_TIMEOUT", "60"))
         
         self._supabase_url = os.getenv("SUPABASE_URL", "")
         self._supabase_service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
@@ -86,7 +91,7 @@ class JobManager:
     async def _cleanup_loop(self):
         while True:
             await asyncio.sleep(self._cleanup_interval)
-            self.cleanup_old_jobs(self._max_job_age)
+            await self.cleanup_old_jobs(self._max_job_age)
             if self._db_enabled:
                 await self._cleanup_db_jobs()
 
@@ -226,24 +231,30 @@ class JobManager:
         except Exception as e:
             logger.warning(f"[JOB_MANAGER] Warning: Exception cleaning up DB jobs after retries: {e}")
 
-    def create_job(self, upload_id: str, user_id: str, media_type: str, file_url: str) -> str:
-        job_id = str(uuid.uuid4())
-        job = AnalysisJob(
-            job_id=job_id,
-            upload_id=upload_id,
-            user_id=user_id,
-            media_type=media_type,
-            file_url=file_url,
-            status=JobStatus.PENDING,
-            progress=0
-        )
-        self.jobs[job_id] = job
-        
-        if self._db_enabled:
-            self._safe_persist_job(job)
-        
-        logger.info(f"[JOB_MANAGER] Created job {job_id} for upload {upload_id}")
-        return job_id
+    async def create_job(self, upload_id: str, user_id: str, media_type: str, file_url: str) -> str:
+        async with self._lock:
+            # Check for existing active job under lock to prevent duplicates
+            existing = self.get_job_by_upload(upload_id)
+            if existing and existing.status not in (JobStatus.FAILED,):
+                return existing.job_id
+
+            job_id = str(uuid.uuid4())
+            job = AnalysisJob(
+                job_id=job_id,
+                upload_id=upload_id,
+                user_id=user_id,
+                media_type=media_type,
+                file_url=file_url,
+                status=JobStatus.PENDING,
+                progress=0
+            )
+            self.jobs[job_id] = job
+
+            if self._db_enabled:
+                self._safe_persist_job(job)
+
+            logger.info(f"[JOB_MANAGER] Created job {job_id} for upload {upload_id}")
+            return job_id
 
     def get_job(self, job_id: str) -> Optional[AnalysisJob]:
         return self.jobs.get(job_id)
@@ -277,7 +288,7 @@ class JobManager:
             logger.info(f"[JOB_MANAGER] Downloading and caching media: {job.file_url}")
             media_data, media_path = await asyncio.wait_for(
                 media_cache.get_or_download(job.file_url), 
-                timeout=30.0  # 30 second timeout for download
+                timeout=self._download_timeout
             )
             
             job.status = JobStatus.PREPROCESSING
@@ -289,7 +300,7 @@ class JobManager:
             # Pass cached media path to preprocessing function with timeout
             preprocess_result = await asyncio.wait_for(
                 preprocess_func(media_path, job.media_type),
-                timeout=60.0  # 60 second timeout for preprocessing
+                timeout=self._preprocess_timeout
             )
             logger.info(f"[JOB_MANAGER] Preprocessing done: {preprocess_result.to_dict()}")
             
@@ -302,7 +313,7 @@ class JobManager:
             # Pass cached media path to OCR function with timeout
             ocr_result = await asyncio.wait_for(
                 ocr_func(media_path, job.media_type),
-                timeout=120.0  # 120 second timeout for OCR
+                timeout=self._ocr_timeout
             )
             logger.info(f"[JOB_MANAGER] OCR done: {ocr_result.to_dict()}")
             
@@ -316,7 +327,7 @@ class JobManager:
             # Pass cached media path and OCR results to tribe function with timeout
             tribe_output = await asyncio.wait_for(
                 tribe_func(media_path, job.media_type, seed, ocr_result.text),
-                timeout=60.0  # 60 second timeout for tribe analysis
+                timeout=self._tribe_timeout
             )
             
             tribe_output.ocr_text = ocr_result.text
@@ -375,13 +386,14 @@ class JobManager:
                 await media_cache.cleanup_file(media_path)
             raise
 
-    def update_job_status(self, job_id: str, status: JobStatus, progress: int):
-        if job_id in self.jobs:
-            self.jobs[job_id].status = status
-            self.jobs[job_id].progress = progress
-            self.jobs[job_id].updated_at = time.time()
-            if self._db_enabled:
-                asyncio.create_task(self._persist_job(self.jobs[job_id], update_only=True))
+    async def update_job_status(self, job_id: str, status: JobStatus, progress: int):
+        async with self._lock:
+            if job_id in self.jobs:
+                self.jobs[job_id].status = status
+                self.jobs[job_id].progress = progress
+                self.jobs[job_id].updated_at = time.time()
+                if self._db_enabled:
+                    asyncio.create_task(self._persist_job(self.jobs[job_id], update_only=True))
 
     async def _consume_credit_for_job(self, job: AnalysisJob):
         """Consume credit for a successfully completed job"""
@@ -405,17 +417,19 @@ class JobManager:
         except Exception as e:
             logger.error("[JOB_MANAGER] Error consuming credit for job %s: %s", job.job_id, e)
 
-    def get_all_jobs(self) -> Dict[str, Dict[str, Any]]:
-        return {job_id: job.to_dict() for job_id, job in self.jobs.items()}
+    async def get_all_jobs(self) -> Dict[str, Dict[str, Any]]:
+        async with self._lock:
+            return {job_id: job.to_dict() for job_id, job in self.jobs.items()}
 
-    def cleanup_old_jobs(self, max_age_seconds: int = 3600):
-        current_time = time.time()
-        to_remove = []
-        for job_id, job in self.jobs.items():
-            if current_time - job.updated_at > max_age_seconds:
-                to_remove.append(job_id)
-        for job_id in to_remove:
-            del self.jobs[job_id]
-            logger.info(f"[JOB_MANAGER] Cleaned up old job {job_id}")
+    async def cleanup_old_jobs(self, max_age_seconds: int = 3600):
+        async with self._lock:
+            current_time = time.time()
+            to_remove = []
+            for job_id, job in self.jobs.items():
+                if current_time - job.updated_at > max_age_seconds:
+                    to_remove.append(job_id)
+            for job_id in to_remove:
+                del self.jobs[job_id]
+                logger.info(f"[JOB_MANAGER] Cleaned up old job {job_id}")
 
 job_manager = JobManager()

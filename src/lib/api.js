@@ -1,8 +1,24 @@
+import { logger } from './logger';
+import { errorFromResponse } from './errors';
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 import { supabase } from './supabase';
 
 const POLL_INTERVAL = parseInt(import.meta.env.VITE_POLL_INTERVAL || '1500', 10);
 const MAX_POLL_ATTEMPTS = parseInt(import.meta.env.VITE_MAX_POLL_ATTEMPTS || '60', 10);
+
+/**
+ * Parse error response from API and throw typed error
+ */
+async function handleApiError(response, fallbackMessage = 'Unknown error') {
+  try {
+    const body = await response.json();
+    const detail = body.detail || body.error || fallbackMessage;
+    throw errorFromResponse(response.status, detail);
+  } catch (e) {
+    if (e.name && e.name !== 'Error') throw e;
+    throw errorFromResponse(response.status, fallbackMessage);
+  }
+}
 
 /**
  * Create an async analysis job via the backend.
@@ -47,8 +63,7 @@ export async function getJobStatus(jobId) {
   const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}`);
   
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-    throw new Error(error.detail || `HTTP ${response.status}`);
+    await handleApiError(response);
   }
   
   return response.json();
@@ -61,8 +76,7 @@ export async function getJobByUpload(uploadId) {
     if (response.status === 404) {
       return null;
     }
-    const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-    throw new Error(error.detail || `HTTP ${response.status}`);
+    await handleApiError(response);
   }
   
   return response.json();
@@ -114,8 +128,7 @@ export async function runSyncAnalysis(uploadId, mediaType, fileUrl) {
   });
   
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-    throw new Error(error.detail || `HTTP ${response.status}`);
+    await handleApiError(response);
   }
   
   return response.json();
@@ -179,8 +192,7 @@ export async function createCheckoutSession(packageId, userId, email) {
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-    throw new Error(error.detail || `HTTP ${response.status}`);
+    await handleApiError(response);
   }
 
   return response.json();
@@ -189,7 +201,7 @@ export async function createCheckoutSession(packageId, userId, email) {
 export async function getCheckoutStatus(sessionId) {
   const response = await fetch(`${API_BASE_URL}/api/checkout/status/${sessionId}`);
   if (!response.ok) {
-    throw new Error('Failed to get checkout status');
+    await handleApiError(response, 'Failed to get checkout status');
   }
   return response.json();
 }
@@ -207,8 +219,7 @@ export async function verifyAndCredit(sessionId) {
   });
   
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Verification failed' }));
-    throw new Error(error.detail || `HTTP ${response.status}`);
+    await handleApiError(response);
   }
   
   return response.json();
@@ -230,10 +241,7 @@ export async function validateVideo(fileUrl, maxDuration = 20) {
   });
   
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-    const errorDetail = error.detail || {};
-    const errors = errorDetail.errors || [errorDetail.message || 'Validation failed'];
-    throw new Error(errors.join(', '));
+    await handleApiError(response);
   }
   
   return response.json();
@@ -289,7 +297,7 @@ export function subscribeToJob(jobId, options = {}) {
       });
       
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        throw errorFromResponse(response.status, `SSE connection failed: HTTP ${response.status}`);
       }
       
       const reader = response.body.getReader();
@@ -331,19 +339,19 @@ export function subscribeToJob(jobId, options = {}) {
               return;
             }
           } catch (e) {
-            console.error('SSE parse error:', e);
+            logger.error('SSE parse error:', e);
           }
         }
       }
     } catch (error) {
       if (error.name === 'AbortError') return;
       
-      console.error('SSE error:', error);
+      logger.error('SSE error:', error);
       
       if (retryCount < maxRetries) {
         retryCount++;
         const delay = getBackoffDelay(retryCount);
-        console.log(`SSE reconnecting in ${delay}ms (attempt ${retryCount}/${maxRetries})`);
+        logger.debug(`SSE reconnecting in ${delay}ms (attempt ${retryCount}/${maxRetries})`);
         setTimeout(() => {
           connect();
         }, delay);

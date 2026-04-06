@@ -3,6 +3,7 @@ import { Link, Navigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import LazyImage from '../components/LazyImage'
 import { Shield, Home, Target, ChevronRight, MessageSquare, ExternalLink, Loader2, RefreshCw, Send, AlertCircle } from 'lucide-react'
+import { logger } from '../lib/logger'
 
 const UploadCardSkeleton = () => (
   <div className="admin-upload-skeleton">
@@ -38,7 +39,7 @@ export default function AdminDashboard({ session }) {
       const { data: { session: currentSession } } = await supabase.auth.getSession()
       
       if (!currentSession) {
-        console.log('No session found')
+        logger.debug('No session found')
         setLoading(false)
         return
       }
@@ -62,7 +63,7 @@ export default function AdminDashboard({ session }) {
         await fetchGlobalUploads()
       }
     } catch (err) {
-      console.error('Admin verification failed:', err)
+      logger.error('Admin verification failed:', err)
       setError('Failed to verify admin access. Please try again.')
       showToast('Admin verification failed', 'error')
     } finally {
@@ -94,7 +95,7 @@ export default function AdminDashboard({ session }) {
       const { uploads } = await response.json()
       setGlobalUploads(uploads || [])
     } catch (err) {
-      console.error('Failed to fetch uploads:', err)
+      logger.error('Failed to fetch uploads:', err)
       showToast('Failed to load uploads. Please try again.', 'error')
     }
   }
@@ -148,7 +149,7 @@ export default function AdminDashboard({ session }) {
       setGlobalUploads(prev => prev.map(u => u.id === id ? { ...u, admin_feedback: feedback.trim() } : u))
       showToast('Feedback submitted successfully!', 'success')
     } catch (err) {
-      console.error('Failed to submit feedback:', err)
+      logger.error('Failed to submit feedback:', err)
       showToast('Failed to submit feedback. Please try again.', 'error')
     } finally {
       setSubmitting(prev => ({ ...prev, [id]: false }))
