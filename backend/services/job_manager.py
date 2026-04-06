@@ -63,12 +63,12 @@ class JobManager:
         self._supabase_service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
         self._db_enabled = bool(self._supabase_url and self._supabase_service_key)
         
-         if self._db_enabled:
-             logger.info("[JOB_MANAGER] Database persistence enabled")
-         else:
-             logger.warning("[JOB_MANAGER] WARNING: Running without database persistence (SUPABASE_SERVICE_ROLE_KEY not set)")
-         
-         logger.info(f"[JOB_MANAGER] Initialized (cleanup every {self._cleanup_interval}s, max age {self._max_job_age}s)")
+        if self._db_enabled:
+            logger.info("[JOB_MANAGER] Database persistence enabled")
+        else:
+            logger.warning("[JOB_MANAGER] WARNING: Running without database persistence (SUPABASE_SERVICE_ROLE_KEY not set)")
+        
+        logger.info(f"[JOB_MANAGER] Initialized (cleanup every {self._cleanup_interval}s, max age {self._max_job_age}s)")
 
     async def start(self):
         """Call this from lifespan to initialize async tasks after event loop exists"""
@@ -76,12 +76,12 @@ class JobManager:
             await self._load_jobs_from_db()
         self.start_cleanup_scheduler()
 
-     def start_cleanup_scheduler(self):
-         if self._cleanup_task is not None and not self._cleanup_task.done():
-             logger.info("[JOB_MANAGER] Cleanup scheduler already running")
-             return
-         self._cleanup_task = asyncio.create_task(self._cleanup_loop())
-         logger.info("[JOB_MANAGER] Started scheduled cleanup task")
+    def start_cleanup_scheduler(self):
+        if self._cleanup_task is not None and not self._cleanup_task.done():
+            logger.info("[JOB_MANAGER] Cleanup scheduler already running")
+            return
+        self._cleanup_task = asyncio.create_task(self._cleanup_loop())
+        logger.info("[JOB_MANAGER] Started scheduled cleanup task")
 
     async def _cleanup_loop(self):
         while True:
@@ -90,11 +90,11 @@ class JobManager:
             if self._db_enabled:
                 await self._cleanup_db_jobs()
 
-     def stop_cleanup_scheduler(self):
-         if self._cleanup_task is not None:
-             self._cleanup_task.cancel()
-             self._cleanup_task = None
-             logger.info("[JOB_MANAGER] Stopped cleanup scheduler")
+    def stop_cleanup_scheduler(self):
+        if self._cleanup_task is not None:
+            self._cleanup_task.cancel()
+            self._cleanup_task = None
+            logger.info("[JOB_MANAGER] Stopped cleanup scheduler")
 
     def _get_db_headers(self) -> Dict[str, str]:
         """Get headers for service role authentication - synchronous"""
@@ -110,27 +110,40 @@ class JobManager:
         if not self._db_enabled:
             return
         
-         try:
-             db_jobs = await retry_with_backoff(_fetch, max_retries=3, base_delay=1.0)
-             
-             for db_job in db_jobs:
-                 job = AnalysisJob(
-                     job_id=db_job["job_id"],
-                     upload_id=db_job["upload_id"],
-                     user_id=db_job["user_id"],
-                     media_type=db_job["media_type"],
-                     file_url=db_job["file_url"],
-                     status=JobStatus(db_job["status"]),
-                     progress=db_job["progress"],
-                     result=db_job.get("result"),
-                     error=db_job.get("error"),
-                     created_at=datetime.fromisoformat(db_job["created_at"].replace("Z", "+00:00")).timestamp(),
-                     updated_at=datetime.fromisoformat(db_job["updated_at"].replace("Z", "+00:00")).timestamp()
-                 )
-                 self.jobs[job.job_id] = job
-             logger.info(f"[JOB_MANAGER] Loaded {len(db_jobs)} active jobs from database")
-         except Exception as e:
-             logger.error(f"[JOB_MANAGER] Error loading jobs from database: {e}")
+        async def _fetch():
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(
+                    f"{self._supabase_url}/rest/v1/jobs",
+                    headers=self._get_db_headers(),
+                    params={
+                        "status": f"in.(pending,preprocessing,ocr_extracting,tribe_analyzing,mapping_scores)",
+                        "select": "*"
+                    }
+                )
+                response.raise_for_status()
+                return response.json()
+        
+        try:
+            db_jobs = await retry_with_backoff(_fetch, max_retries=3, base_delay=1.0)
+            
+            for db_job in db_jobs:
+                job = AnalysisJob(
+                    job_id=db_job["job_id"],
+                    upload_id=db_job["upload_id"],
+                    user_id=db_job["user_id"],
+                    media_type=db_job["media_type"],
+                    file_url=db_job["file_url"],
+                    status=JobStatus(db_job["status"]),
+                    progress=db_job["progress"],
+                    result=db_job.get("result"),
+                    error=db_job.get("error"),
+                    created_at=datetime.fromisoformat(db_job["created_at"].replace("Z", "+00:00")).timestamp(),
+                    updated_at=datetime.fromisoformat(db_job["updated_at"].replace("Z", "+00:00")).timestamp()
+                )
+                self.jobs[job.job_id] = job
+            logger.info(f"[JOB_MANAGER] Loaded {len(db_jobs)} active jobs from database")
+        except Exception as e:
+            logger.error(f"[JOB_MANAGER] Error loading jobs from database: {e}")
 
     async def _persist_job(self, job: AnalysisJob, update_only: bool = False):
         """Persist job to database with retry logic"""
@@ -207,11 +220,11 @@ class JobManager:
                 response.raise_for_status()
                 return response.json()
         
-         try:
-             result = await retry_with_backoff(_cleanup, max_retries=2, base_delay=1.0)
-             logger.info(f"[JOB_MANAGER] Cleaned up {result} old jobs from database")
-         except Exception as e:
-             logger.warning(f"[JOB_MANAGER] Warning: Exception cleaning up DB jobs after retries: {e}")
+        try:
+            result = await retry_with_backoff(_cleanup, max_retries=2, base_delay=1.0)
+            logger.info(f"[JOB_MANAGER] Cleaned up {result} old jobs from database")
+        except Exception as e:
+            logger.warning(f"[JOB_MANAGER] Warning: Exception cleaning up DB jobs after retries: {e}")
 
     def create_job(self, upload_id: str, user_id: str, media_type: str, file_url: str) -> str:
         job_id = str(uuid.uuid4())
@@ -229,7 +242,7 @@ class JobManager:
         if self._db_enabled:
             self._safe_persist_job(job)
         
-         logger.info(f"[JOB_MANAGER] Created job {job_id} for upload {upload_id}")
+        logger.info(f"[JOB_MANAGER] Created job {job_id} for upload {upload_id}")
         return job_id
 
     def get_job(self, job_id: str) -> Optional[AnalysisJob]:
@@ -255,112 +268,112 @@ class JobManager:
         job = self.jobs.get(job_id)
         if not job:
             raise ValueError(f"Job {job_id} not found")
-         
-         logger.info(f"[JOB_MANAGER] Starting job {job_id}")
-         
+        
+        logger.info(f"[JOB_MANAGER] Starting job {job_id}")
+        
         # Add job timeout (5 minutes)
         try:
             # Download media once and cache for reuse across all steps
-             logger.info(f"[JOB_MANAGER] Downloading and caching media: {job.file_url}")
+            logger.info(f"[JOB_MANAGER] Downloading and caching media: {job.file_url}")
             media_data, media_path = await asyncio.wait_for(
                 media_cache.get_or_download(job.file_url), 
                 timeout=30.0  # 30 second timeout for download
             )
-             
+            
             job.status = JobStatus.PREPROCESSING
             job.progress = 10
             job.updated_at = time.time()
             if self._db_enabled:
                 self._safe_persist_job(job, update_only=True)
-             
+            
             # Pass cached media path to preprocessing function with timeout
             preprocess_result = await asyncio.wait_for(
                 preprocess_func(media_path, job.media_type),
                 timeout=60.0  # 60 second timeout for preprocessing
             )
-             logger.info(f"[JOB_MANAGER] Preprocessing done: {preprocess_result.to_dict()}")
-             
+            logger.info(f"[JOB_MANAGER] Preprocessing done: {preprocess_result.to_dict()}")
+            
             job.status = JobStatus.OCR_EXTRACTING
             job.progress = 25
             job.updated_at = time.time()
             if self._db_enabled:
                 self._safe_persist_job(job, update_only=True)
-             
+            
             # Pass cached media path to OCR function with timeout
             ocr_result = await asyncio.wait_for(
                 ocr_func(media_path, job.media_type),
                 timeout=120.0  # 120 second timeout for OCR
             )
-             logger.info(f"[JOB_MANAGER] OCR done: {ocr_result.to_dict()}")
-             
+            logger.info(f"[JOB_MANAGER] OCR done: {ocr_result.to_dict()}")
+            
             job.status = JobStatus.TRIBE_ANALYZING
             job.progress = 50
             job.updated_at = time.time()
             if self._db_enabled:
                 self._safe_persist_job(job, update_only=True)
-             
+            
             seed = sum(ord(c) for c in job.upload_id)
             # Pass cached media path and OCR results to tribe function with timeout
             tribe_output = await asyncio.wait_for(
                 tribe_func(media_path, job.media_type, seed, ocr_result.text),
                 timeout=60.0  # 60 second timeout for tribe analysis
             )
-             
+            
             tribe_output.ocr_text = ocr_result.text
             tribe_output.ocr_readability = ocr_result.readability_score
-             logger.info(f"[JOB_MANAGER] TRIBE analysis done")
-             
+            logger.info(f"[JOB_MANAGER] TRIBE analysis done")
+            
             job.status = JobStatus.MAPPING_SCORES
             job.progress = 75
             job.updated_at = time.time()
             if self._db_enabled:
                 self._safe_persist_job(job, update_only=True)
-             
+            
             neuro_metrics = score_mapper_func(tribe_output)
             final_result = neuro_metrics.to_neurox_format()
-             
+            
             job.result = final_result
             job.status = JobStatus.COMPLETED
             job.progress = 100
             job.updated_at = time.time()
             if self._db_enabled:
                 self._safe_persist_job(job, update_only=True)
-             
+            
             # Consume credit only after successful job completion
             await self._consume_credit_for_job(job)
-             
+            
             # Clean up temp files from preprocessing
             if hasattr(preprocess_result, 'cleanup'):
                 preprocess_result.cleanup()
-             
+            
             # Clean up cached media
             await media_cache.cleanup_file(media_path)
-             
-             logger.info(f"[JOB_MANAGER] Job {job_id} completed with score {final_result['globalScore']}")
+            
+            logger.info(f"[JOB_MANAGER] Job {job_id} completed with score {final_result['globalScore']}")
             return final_result
-             
-         except asyncio.TimeoutError:
-             job.status = JobStatus.FAILED
-             job.error = "Job timed out"
-             job.updated_at = time.time()
-             if self._db_enabled:
-                 self._safe_persist_job(job, update_only=True)
-             logger.error(f"[JOB_MANAGER] Job {job_id} timed out")
-             # Ensure cleanup happens even on timeout
-             if 'media_path' in locals():
-                 await media_cache.cleanup_file(media_path)
-             raise
-         except Exception as e:
-             job.status = JobStatus.FAILED
-             job.error = str(e)
-             job.updated_at = time.time()
-             if self._db_enabled:
-                 self._safe_persist_job(job, update_only=True)
-             logger.error(f"[JOB_MANAGER] Job {job_id} failed: {e}")
-             # Ensure cleanup happens even on failure
-             if 'media_path' in locals():
-                 await media_cache.cleanup_file(media_path)
-             raise
+            
+        except asyncio.TimeoutError:
+            job.status = JobStatus.FAILED
+            job.error = "Job timed out"
+            job.updated_at = time.time()
+            if self._db_enabled:
+                self._safe_persist_job(job, update_only=True)
+            logger.error(f"[JOB_MANAGER] Job {job_id} timed out")
+            # Ensure cleanup happens even on timeout
+            if 'media_path' in locals():
+                await media_cache.cleanup_file(media_path)
+            raise
+        except Exception as e:
+            job.status = JobStatus.FAILED
+            job.error = str(e)
+            job.updated_at = time.time()
+            if self._db_enabled:
+                self._safe_persist_job(job, update_only=True)
+            logger.error(f"[JOB_MANAGER] Job {job_id} failed: {e}")
+            # Ensure cleanup happens even on failure
+            if 'media_path' in locals():
+                await media_cache.cleanup_file(media_path)
+            raise
 
     def update_job_status(self, job_id: str, status: JobStatus, progress: int):
         if job_id in self.jobs:
@@ -399,10 +412,10 @@ class JobManager:
         current_time = time.time()
         to_remove = []
         for job_id, job in self.jobs.items():
-         if current_time - job.updated_at > max_age_seconds:
-                 to_remove.append(job_id)
-         for job_id in to_remove:
-             del self.jobs[job_id]
-             logger.info(f"[JOB_MANAGER] Cleaned up old job {job_id}")
+            if current_time - job.updated_at > max_age_seconds:
+                to_remove.append(job_id)
+        for job_id in to_remove:
+            del self.jobs[job_id]
+            logger.info(f"[JOB_MANAGER] Cleaned up old job {job_id}")
 
 job_manager = JobManager()

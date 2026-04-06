@@ -1,9 +1,13 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 import { supabase } from './supabase';
 
-const POLL_INTERVAL = 1500;
-const MAX_POLL_ATTEMPTS = 60;
+const POLL_INTERVAL = parseInt(import.meta.env.VITE_POLL_INTERVAL || '1500', 10);
+const MAX_POLL_ATTEMPTS = parseInt(import.meta.env.VITE_MAX_POLL_ATTEMPTS || '60', 10);
 
+/**
+ * Create an async analysis job via the backend.
+ * Returns job_id and a short-lived SSE token for real-time updates.
+ */
 export async function createAnalysisJob(uploadId, mediaType, fileUrl) {
   const response = await fetch(`${API_BASE_URL}/api/jobs/create`, {
     method: 'POST',
@@ -64,6 +68,10 @@ export async function getJobByUpload(uploadId) {
   return response.json();
 }
 
+/**
+ * @deprecated Use subscribeToJob() instead. This polling approach is kept for
+ * backward compatibility only and will be removed in a future release.
+ */
 export async function pollJobUntilComplete(jobId, onProgress) {
   let attempts = 0;
   
@@ -89,6 +97,11 @@ export async function pollJobUntilComplete(jobId, onProgress) {
   throw new Error('Analysis timed out');
 }
 
+/**
+ * WARNING: This function calls the /api/analyze endpoint which uses the
+ * synchronous TRIBE pipeline. For production, prefer createAnalysisJob() +
+ * subscribeToJob() which uses the async job queue.
+ */
 export async function runSyncAnalysis(uploadId, mediaType, fileUrl) {
   const response = await fetch(`${API_BASE_URL}/api/analyze`, {
     method: 'POST',

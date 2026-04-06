@@ -17,15 +17,6 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)]
 )
 logger = logging.getLogger("neurox")
-import logging
-import sys
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)]
-)
-logger = logging.getLogger("neurox")
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -103,8 +94,14 @@ async def lifespan(app: FastAPI):
     
     jwt_secret = os.getenv("SUPABASE_JWT_SECRET", "")
     if not jwt_secret or jwt_secret == "YOUR_JWT_SECRET_HERE":
-        logger.warning("SUPABASE_JWT_SECRET is not configured! Authentication will fail.")
-        logger.warning("Set your Supabase JWT secret from: Project Settings -> API -> JWT Secret")
+        env = os.getenv("ENVIRONMENT", "development")
+        if env == "production":
+            logger.critical("SUPABASE_JWT_SECRET is not configured! Authentication will fail.")
+            logger.critical("Set your Supabase JWT secret from: Project Settings -> API -> JWT Secret")
+            raise RuntimeError("Missing required SUPABASE_JWT_SECRET in production")
+        else:
+            logger.warning("SUPABASE_JWT_SECRET is not configured! Authentication will fail in production.")
+            logger.warning("Set your Supabase JWT secret from: Project Settings -> API -> JWT Secret")
     
     await job_manager.start()
     yield
@@ -418,9 +415,9 @@ async def create_analysis_job(request: Request, req: CreateJobRequest):
                 has_credits = response.json()
             else:
                 has_credits = False
-        except Exception as e:
-            logger.error("Failed to check credits: %s", e)
-            has_credits = False
+    except Exception as e:
+        logger.error("Failed to check credits: %s", e)
+        has_credits = False
     
     if not has_credits:
         raise HTTPException(status_code=402, detail="Insufficient credits. Please purchase more scans.")
@@ -602,6 +599,19 @@ async def analyze_target(request: Request, req: AnalysisRequest):
 @app.post("/api/analyze-sync")
 @limiter.limit("10/minute")
 async def analyze_sync(request: Request, req: AnalysisRequest):
+    """
+    DEVELOPMENT-ONLY ENDPOINT.
+    Uses seeded random / placeholder data instead of real TRIBE analysis.
+    Blocked in production to prevent returning fake results to users.
+    For production analysis, use POST /api/analyze or POST /api/jobs/create.
+    """
+    env = os.getenv("ENVIRONMENT", "development")
+    if env == "production":
+        raise HTTPException(
+            status_code=403,
+            detail="/api/analyze-sync is disabled in production. Use /api/analyze or /api/jobs/create instead."
+        )
+
     seed = sum(ord(c) for c in req.upload_id)
     brightness_modifier = 0
 
