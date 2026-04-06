@@ -323,6 +323,9 @@ class JobManager:
             if self._db_enabled:
                 self._safe_persist_job(job, update_only=True)
             
+            # Consume credit only after successful job completion
+            await self._consume_credit_for_job(job)
+            
             # Clean up temp files from preprocessing
             if hasattr(preprocess_result, 'cleanup'):
                 preprocess_result.cleanup()
@@ -349,6 +352,28 @@ class JobManager:
             self.jobs[job_id].updated_at = time.time()
             if self._db_enabled:
                 asyncio.create_task(self._persist_job(self.jobs[job_id], update_only=True))
+
+    async def _consume_credit_for_job(self, job: AnalysisJob):
+        """Consume credit for a successfully completed job"""
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                supabase_url = os.getenv("SUPABASE_URL", "")
+                supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+                response = await client.post(
+                    f"{supabase_url}/rest/v1/rpc/consume_credit",
+                    headers={
+                        "apikey": supabase_key,
+                        "Authorization": f"Bearer {supabase_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={}
+                )
+                if response.status_code != 200:
+                    logger.error("[JOB_MANAGER] Failed to consume credit for job %s: %s", job.job_id, response.text)
+                else:
+                    logger.info("[JOB_MANAGER] Credit consumed for job %s", job.job_id)
+        except Exception as e:
+            logger.error("[JOB_MANAGER] Error consuming credit for job %s: %s", job.job_id, e)
 
     def get_all_jobs(self) -> Dict[str, Dict[str, Any]]:
         return {job_id: job.to_dict() for job_id, job in self.jobs.items()}

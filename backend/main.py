@@ -417,10 +417,10 @@ async def create_analysis_job(request: Request, req: CreateJobRequest):
             if response.status_code == 200:
                 has_credits = response.json()
             else:
-                has_credits = True
-    except Exception as e:
-        logger.error("Failed to check credits: %s", e)
-        has_credits = True
+                has_credits = False
+        except Exception as e:
+            logger.error("Failed to check credits: %s", e)
+            has_credits = False
     
     if not has_credits:
         raise HTTPException(status_code=402, detail="Insufficient credits. Please purchase more scans.")
