@@ -1,12 +1,16 @@
 import io
 import os
 import subprocess
+import asyncio
+import logging
 from typing import Optional, Dict, Any, List
 import httpx
 from PIL import Image, ImageEnhance, ImageFilter
 import numpy as np
 from .tribe_service import is_url_safe
 from .retry import retry_with_backoff
+
+logger = logging.getLogger("neurox")
 
 # Lazy load torch and easyocr to handle import failures gracefully
 _torch = None
@@ -26,26 +30,26 @@ def _try_load_ocr():
         _torch = _torch_mod
         _easyocr = _easyocr_mod
         
-        device = _torch.device("cuda" if _torch.cuda.is_available() else "cpu")
-        gpu_info = _torch.cuda.get_device_name(0) if _torch.cuda.is_available() else "CPU"
-        print(f"[OCR] Initializing EasyOCR on {device} ({gpu_info})")
+         device = _torch.device("cuda" if _torch.cuda.is_available() else "cpu")
+         gpu_info = _torch.cuda.get_device_name(0) if _torch.cuda.is_available() else "CPU"
+         logger.info(f"[OCR] Initializing EasyOCR on {device} ({gpu_info})")
         
-        _easyocr_reader = _easyocr_mod.Reader(
-            ['en'],
-            gpu=device.type == 'cuda',
-            verbose=False,
-            model_storage_directory=None,
-            download_enabled=True
-        )
-        print(f"[OCR] Initialized with EasyOCR on {device} ({gpu_info})")
+         _easyocr_reader = _easyocr_mod.Reader(
+             ['en'],
+             gpu=device.type == 'cuda',
+             verbose=False,
+             model_storage_directory=None,
+             download_enabled=True
+         )
+         logger.info(f"[OCR] Initialized with EasyOCR on {device} ({gpu_info})")
         OCR_AVAILABLE = True
         return True
-    except Exception as e:
-        OCR_ERROR = str(e)
-        print(f"[OCR] WARNING: Failed to load EasyOCR: {e}")
-        print(f"[OCR] Falling back to mock OCR implementation")
-        OCR_AVAILABLE = False
-        return False
+     except Exception as e:
+         OCR_ERROR = str(e)
+         logger.warning(f"[OCR] Failed to load EasyOCR: {e}")
+         logger.info("[OCR] Falling back to mock OCR implementation")
+         OCR_AVAILABLE = False
+         return False
 
 class OCRResult:
     def __init__(self,
@@ -76,13 +80,13 @@ class OCRService:
             self._initialized = True
 
     async def extract_text(self, file_path: str, media_type: str) -> OCRResult:
-        print(f"[OCR] Extracting text from {media_type}: {file_path}")
+         logger.info(f"[OCR] Extracting text from {media_type}: {file_path}")
         
         self._ensure_initialized()
         
-        if not OCR_AVAILABLE:
-            print(f"[OCR] Using mock OCR fallback")
-            return await self._mock_extract(file_path, media_type)
+         if not OCR_AVAILABLE:
+             logger.info("[OCR] Using mock OCR fallback")
+             return await self._mock_extract(file_path, media_type)
         
         if media_type == "image":
             return await self._extract_from_image(file_path)
@@ -96,7 +100,7 @@ class OCRService:
         # Check if URL looks like a non-existent/corrupted resource
         corrupted_indicators = ["does_not_exist", "definitely_does_not_exist", "corrupted", "invalid", "nonexistent"]
         if any(indicator in file_path.lower() for indicator in corrupted_indicators):
-            print(f"[OCR] Mock: URL appears invalid/corrupted, returning empty result")
+             logger.info("[OCR] Mock: URL appears invalid/corrupted, returning empty result")
             return OCRResult(
                 text="",
                 readability_score=0.0,
@@ -178,7 +182,7 @@ class OCRService:
             )
             
         except Exception as e:
-            print(f"[OCR] Image extraction failed: {e}")
+             logger.error(f"[OCR] Image extraction failed: {e}")
             return OCRResult(
                 text="",
                 readability_score=0.0,
@@ -194,7 +198,7 @@ class OCRService:
             if not is_url_safe(file_path):
                 raise ValueError(f"URL not allowed: {file_path}")
         
-        print("[OCR] Extracting text from video frames...")
+         logger.info("[OCR] Extracting text from video frames...")
         
         try:
             if is_http:
@@ -214,22 +218,35 @@ class OCRService:
             with open(temp_path, 'wb') as f:
                 f.write(video_data)
             
-            # Extract key frames using ffmpeg
-            frames = self._extract_video_frames(temp_path, num_frames=5)
+            # Extract key frames using ffmpeg - increased to 8 frames as requested
+            frames = self._extract_video_frames(temp_path, num_frames=8)
             
-            # Run OCR on each frame
+            # Run OCR on each frame with timeout handling for EasyOCR
             all_text = []
             all_regions = []
             for i, frame in enumerate(frames):
-                results = _easyocr_reader.readtext(frame)
-                for bbox, text, confidence in results:
-                    if confidence > 0.4:
-                        all_text.append(text)
-                        all_regions.append({
-                            "frame": i,
-                            "bbox": bbox,
-                            "confidence": float(confidence)
-                        })
+                try:
+                    # Add timeout for OCR processing on each frame
+                    ocr_task = asyncio.create_task(
+                        asyncio.to_thread(_easyocr_reader.readtext, frame)
+                    )
+                    # Wait for OCR with timeout (30 seconds per frame)
+                    results = await asyncio.wait_for(ocr_task, timeout=30.0)
+                    
+                    for bbox, text, confidence in results:
+                        if confidence > 0.4:
+                            all_text.append(text)
+                            all_regions.append({
+                                "frame": i,
+                                "bbox": bbox,
+                                "confidence": float(confidence)
+                            })
+                except asyncio.TimeoutError:
+                     logger.info(f"[OCR] Timeout processing frame {i}, skipping")
+                    continue
+                except Exception as frame_e:
+                     logger.error(f"[OCR] Error processing frame {i}: {frame_e}")
+                    continue
             
             # Clean up
             if os.path.exists(temp_path):
@@ -246,7 +263,7 @@ class OCRService:
             )
             
         except Exception as e:
-            print(f"[OCR] Video extraction failed: {e}")
+             logger.error(f"[OCR] Video extraction failed: {e}")
             return OCRResult(
                 text="",
                 readability_score=0.0,

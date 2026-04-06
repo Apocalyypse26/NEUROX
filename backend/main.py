@@ -560,6 +560,30 @@ async def get_job_by_upload(request: Request, upload_id: str):
 @app.post("/api/analyze")
 @user_limiter.limit("10/minute")
 async def analyze_target(request: Request, req: AnalysisRequest):
+    auth_header = request.headers.get("authorization", "")
+    auth_user_id = auth_service.get_user_id_from_token(auth_header)
+    
+    if auth_user_id and auth_user_id != req.user_id:
+        raise HTTPException(status_code=403, detail="User ID mismatch")
+    
+    # Check for existing job to prevent duplicates
+    existing_job = job_manager.get_job_by_upload(req.upload_id)
+    if existing_job and existing_job.status == JobStatus.COMPLETED:
+        return {
+            "job_id": existing_job.job_id,
+            "status": existing_job.status.value,
+            "message": "Analysis already completed",
+            "result": existing_job.result
+        }
+    
+    if existing_job:
+        return {
+            "job_id": existing_job.job_id,
+            "status": existing_job.status.value,
+            "progress": existing_job.progress,
+            "message": "Existing job found"
+        }
+    
     job_id = job_manager.create_job(req.upload_id, req.user_id, req.media_type, req.file_url)
     
     try:

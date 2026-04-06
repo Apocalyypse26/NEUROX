@@ -3,11 +3,14 @@ import os
 import tempfile
 import subprocess
 import shutil
+import logging
 from typing import Optional, Tuple, List
 from PIL import Image
 import httpx
 from .tribe_service import is_url_safe
 from .retry import retry_with_backoff
+
+logger = logging.getLogger("neurox")
 
 class PreprocessResult:
     def __init__(self, 
@@ -50,7 +53,7 @@ class PreprocessService:
         self.temp_dir = tempfile.mkdtemp(prefix="neurox_preprocess_")
 
     async def process_media(self, file_url: str, media_type: str) -> PreprocessResult:
-        print(f"[PREPROCESS] Processing {media_type}: {file_url}")
+         logger.info(f"[PREPROCESS] Processing {media_type}: {file_url}")
         
         if media_type == "image":
             return await self._process_image(file_url)
@@ -104,7 +107,7 @@ class PreprocessService:
             )
             
         except Exception as e:
-            print(f"[PREPROCESS] Image processing failed: {e}")
+             logger.error(f"[PREPROCESS] Image processing failed: {e}")
             return PreprocessResult(
                 processed_path=file_path,
                 duration_seconds=3.0,
@@ -194,7 +197,7 @@ class PreprocessService:
             )
             
         except Exception as e:
-            print(f"[PREPROCESS] Video processing failed: {e}")
+             logger.error(f"[PREPROCESS] Video processing failed: {e}")
             # Clean up any temp files on error
             for path in temp_files_to_cleanup:
                 try:
@@ -221,9 +224,9 @@ class PreprocessService:
             capture_output=True, text=True
         )
         
-        if probe_result.returncode != 0:
-            print(f"[PREPROCESS] Failed to get video duration: {probe_result.stderr}")
-            return frame_paths
+         if probe_result.returncode != 0:
+             logger.error(f"[PREPROCESS] Failed to get video duration: {probe_result.stderr}")
+             return frame_paths
         
         duration = float(probe_result.stdout.strip())
         
@@ -250,7 +253,7 @@ class PreprocessService:
                     os.unlink(frame_path)
                     
             except Exception as e:
-                print(f"[PREPROCESS] Failed to extract frame at {timestamp}s: {e}")
+                 logger.error(f"[PREPROCESS] Failed to extract frame at {timestamp}s: {e}")
                 try:
                     os.unlink(frame_path)
                 except Exception:
