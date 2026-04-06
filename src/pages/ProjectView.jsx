@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { validateVideo } from '../lib/api'
+import { validateVideo, verifyAndCredit } from '../lib/api'
 import { useDropzone } from 'react-dropzone'
 import StripeCheckout from '../components/StripeCheckout'
 import ConfirmModal from '../components/ConfirmModal'
@@ -73,11 +73,36 @@ export default function ProjectView({ session }) {
     
     const urlParams = new URLSearchParams(window.location.search)
     if (urlParams.get('payment') === 'success') {
-      setSuccessMsg('Payment successful! Your credits have been added.')
-      fetchProfile()
+      const sessionId = urlParams.get('session_id')
+      if (sessionId) {
+        verifyPayment(sessionId)
+      } else {
+        setSuccessMsg('Payment successful! Your credits have been added.')
+        fetchProfile()
+      }
       window.history.replaceState({}, '', window.location.pathname)
     }
   }, [projectId])
+
+  const verifyPayment = async (sessionId) => {
+    try {
+      const result = await verifyAndCredit(sessionId)
+      
+      if (result.success) {
+        if (result.type === 'credits') {
+          setSuccessMsg(`Payment successful! ${result.credits} credits added to your account.`)
+        } else if (result.type === 'subscription') {
+          setSuccessMsg(`Payment successful! ${result.plan_name} subscription activated!`)
+        }
+        await fetchProfile()
+      } else {
+        setErrorMsg('Payment verification failed. Please contact support.')
+      }
+    } catch (err) {
+      console.error('Payment verification error:', err)
+      setErrorMsg('Payment verification failed. Please contact support.')
+    }
+  }
 
   const fetchProfile = async () => {
     setCreditsLoading(true)

@@ -462,5 +462,85 @@ class StripeService:
             "metadata": session.metadata,
         }
 
+    async def verify_session_and_credit(self, session_id: str, user_id: str) -> Dict[str, Any]:
+        """
+        Verify payment and add credits/subscription without webhooks.
+        Called by frontend after Stripe redirect.
+        """
+        if not self.enabled:
+            return {"success": False, "error": "Stripe not configured"}
+
+        try:
+            session = stripe.checkout.Session.retrieve(session_id)
+            
+            if session.payment_status != "paid":
+                return {"success": False, "error": "Payment not completed", "status": session.payment_status}
+
+            metadata = session.metadata or {}
+            session_user_id = metadata.get("user_id")
+            
+            # Verify user matches
+            if session_user_id != user_id:
+                return {"success": False, "error": "User mismatch"}
+
+            # Check if it's a subscription
+            plan_id = metadata.get("plan_id")
+            if plan_id and plan_id in SUBSCRIPTION_PLANS:
+                plan = SUBSCRIPTION_PLANS[plan_id]
+                stripe_sub_id = session.subscription
+                stripe_customer_id = session.customer
+
+                if stripe_sub_id:
+                    try:
+                        stripe_sub = stripe.Subscription.retrieve(stripe_sub_id)
+                        current_period_start = stripe_sub.current_period_start
+                        current_period_end = stripe_sub.current_period_end
+                        
+                        period_start = datetime.fromtimestamp(current_period_start)
+                        period_end = datetime.fromtimestamp(current_period_end)
+
+                        await _activate_subscription(user_id, {
+                            "subscription_id": stripe_sub_id,
+                            "customer_id": stripe_customer_id,
+                            "plan_id": plan_id,
+                            "current_period_start": current_period_start,
+                            "current_period_end": current_period_end
+                        })
+
+                        return {
+                            "success": True,
+                            "type": "subscription",
+                            "plan_id": plan_id,
+                            "plan_name": plan.get("name"),
+                            "scans_per_month": plan.get("scans_per_month"),
+                            "is_unlimited": plan.get("is_unlimited")
+                        }
+                    except Exception as e:
+                        logger.error("[VERIFY] Failed to activate subscription: %s", e)
+                        return {"success": False, "error": str(e)}
+
+            # Handle credit purchase
+            credits = int(metadata.get("credits", 0))
+            if credits > 0:
+                success = await _add_credits_to_user(user_id, credits)
+                if success:
+                    return {
+                        "success": True,
+                        "type": "credits",
+                        "credits": credits
+                    }
+                else:
+                    return {"success": False, "error": "Failed to add credits"}
+
+            return {"success": False, "error": "No credits or subscription found"}
+
+        except stripe.error.InvalidRequestError:
+            return {"success": False, "error": "Invalid session ID"}
+        except stripe.error.AuthenticationError:
+            return {"success": False, "error": "Stripe authentication failed"}
+        except Exception as e:
+            logger.error("[VERIFY] Error verifying session: %s", e)
+            return {"success": False, "error": str(e)}
+
 
 stripe_service = StripeService()

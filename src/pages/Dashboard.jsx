@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { verifyAndCredit } from '../lib/api'
 import { Link, useNavigate } from 'react-router-dom'
 import { exportToJSON } from '../lib/utils'
 import { Folder, Plus, LogOut, Code, Shield, ChevronRight, FolderOpen, Clock, MoreVertical, Check, X, Download, Link as LinkIcon, Database, Trash2, Loader2 } from 'lucide-react'
@@ -137,6 +138,26 @@ export default function Dashboard({ session }) {
     window.dispatchEvent(event)
   }
 
+  const verifyPayment = async (sessionId) => {
+    try {
+      const result = await verifyAndCredit(sessionId)
+      
+      if (result.success) {
+        if (result.type === 'credits') {
+          showToast(`Payment successful! ${result.credits} credits added to your account.`, 'success')
+        } else if (result.type === 'subscription') {
+          showToast(`Payment successful! ${result.plan_name} subscription activated!`, 'success')
+        }
+        await fetchCredits()
+      } else {
+        showToast('Payment verification failed. Please contact support.', 'error')
+      }
+    } catch (err) {
+      console.error('Payment verification error:', err)
+      showToast('Payment verification failed. Please contact support.', 'error')
+    }
+  }
+
   useEffect(() => {
     fetchProjects()
     fetchCredits()
@@ -144,8 +165,13 @@ export default function Dashboard({ session }) {
     
     const urlParams = new URLSearchParams(window.location.search)
     if (urlParams.get('payment') === 'success') {
-      setPaymentMessage('Payment successful! Your credits have been added.')
-      fetchCredits()
+      const sessionId = urlParams.get('session_id')
+      if (sessionId) {
+        verifyPayment(sessionId)
+      } else {
+        setPaymentMessage('Payment successful! Your credits have been added.')
+        fetchCredits()
+      }
       window.history.replaceState({}, '', window.location.pathname)
     }
   }, [])

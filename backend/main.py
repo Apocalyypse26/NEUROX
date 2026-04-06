@@ -768,6 +768,37 @@ async def get_checkout_status(request: Request, session_id: str):
         raise HTTPException(status_code=500, detail="Failed to retrieve checkout status")
 
 
+class VerifyPaymentRequest(BaseModel):
+    session_id: str
+
+
+@app.post("/api/checkout/verify-and-credit")
+@user_limiter.limit("10/minute")
+async def verify_and_credit(request: Request, req: VerifyPaymentRequest):
+    """
+    Verify payment and add credits/subscription.
+    Called by frontend after Stripe redirect (when webhooks not available).
+    """
+    auth_header = request.headers.get("authorization", "")
+    user_id = auth_service.get_user_id_from_token(auth_header)
+    
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    try:
+        result = await stripe_service.verify_session_and_credit(req.session_id, user_id)
+        
+        if result.get("success"):
+            return result
+        else:
+            raise HTTPException(status_code=400, detail=result.get("error", "Verification failed"))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Verify and credit error: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to verify payment")
+
+
 @app.get("/api/subscription/status")
 @limiter.limit("30/minute")
 async def get_subscription_status(request: Request):

@@ -147,7 +147,7 @@ export async function getPackages() {
 }
 
 export async function createCheckoutSession(packageId, userId, email) {
-  const successUrl = `${window.location.origin}/dashboard?payment=success`;
+  const successUrl = `${window.location.origin}/dashboard?payment=success&session_id={CHECKOUT_SESSION_ID}`;
   const cancelUrl = `${window.location.origin}/dashboard/project`;
 
   const response = await fetch(`${API_BASE_URL}/api/checkout`, {
@@ -178,6 +178,26 @@ export async function getCheckoutStatus(sessionId) {
   if (!response.ok) {
     throw new Error('Failed to get checkout status');
   }
+  return response.json();
+}
+
+export async function verifyAndCredit(sessionId) {
+  const response = await fetch(`${API_BASE_URL}/api/checkout/verify-and-credit`, {
+    method: 'POST',
+    headers: { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${await getAuthToken()}`
+    },
+    body: JSON.stringify({
+      session_id: sessionId
+    })
+  });
+  
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Verification failed' }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
+  }
+  
   return response.json();
 }
 
