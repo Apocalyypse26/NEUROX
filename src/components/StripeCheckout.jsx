@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { createCheckoutSession, getPackages } from '../lib/api'
-import { CreditCard, Loader2, X, Check, Star } from 'lucide-react'
+import { CreditCard, Loader2, X, Check, Star, Zap, Infinity } from 'lucide-react'
 import BoltIcon from './BoltIcon'
 
 export default function StripeCheckout({ userId, email, onClose, onSuccess }) {
@@ -8,6 +8,7 @@ export default function StripeCheckout({ userId, email, onClose, onSuccess }) {
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(null)
   const [error, setError] = useState('')
+  const [showSubscriptions, setShowSubscriptions] = useState(false)
 
   useEffect(() => {
     loadPackages()
@@ -36,29 +37,67 @@ export default function StripeCheckout({ userId, email, onClose, onSuccess }) {
     }
   }
 
-  const packageList = [
+  const creditPackages = [
     {
-      id: 'credits_10',
-      name: '10 Scans',
-      price: '$15',
-      credits: 10,
-      description: 'Perfect for testing',
+      id: 'starter',
+      name: 'Starter',
+      price: '$9.99',
+      credits: 5,
+      description: 'Perfect for trying out',
       popular: false,
     },
     {
-      id: 'credits_50',
-      name: '50 Scans',
-      price: '$49',
-      credits: 50,
+      id: 'popular',
+      name: 'Popular',
+      price: '$24.99',
+      credits: 20,
       description: 'Best value per scan',
       popular: true,
     },
     {
-      id: 'credits_200',
-      name: '200 Scans',
-      price: '$99',
-      credits: 200,
-      description: 'For power operators',
+      id: 'value',
+      name: 'Value',
+      price: '$39.99',
+      credits: 50,
+      description: 'Great for creators',
+      popular: false,
+    },
+    {
+      id: 'pro',
+      name: 'Pro',
+      price: '$59.99',
+      credits: 100,
+      description: 'For power users',
+      popular: false,
+    },
+  ]
+
+  const subscriptionPlans = [
+    {
+      id: 'hobby_monthly',
+      name: 'Hobby',
+      price: '$9.99/mo',
+      scans: 50,
+      description: '50 scans per month',
+      isUnlimited: false,
+      popular: false,
+    },
+    {
+      id: 'pro_monthly',
+      name: 'Pro',
+      price: '$24.99/mo',
+      scans: 200,
+      description: '200 scans per month',
+      isUnlimited: false,
+      popular: true,
+    },
+    {
+      id: 'enterprise_monthly',
+      name: 'Enterprise',
+      price: '$49.99/mo',
+      scans: 'Unlimited',
+      description: 'Unlimited scans per month',
+      isUnlimited: true,
       popular: false,
     },
   ]
@@ -69,7 +108,7 @@ export default function StripeCheckout({ userId, email, onClose, onSuccess }) {
         <div className="stripe-modal-header">
           <div className="stripe-modal-title">
             <CreditCard size={20} />
-            <h2>Acquire Scan Credits</h2>
+            <h2>{showSubscriptions ? 'Subscribe for More' : 'Acquire Scan Credits'}</h2>
           </div>
           <button className="stripe-close" onClick={onClose}>
             <X size={20} />
@@ -77,6 +116,23 @@ export default function StripeCheckout({ userId, email, onClose, onSuccess }) {
         </div>
 
         <div className="stripe-modal-body">
+          <div className="stripe-tabs">
+            <button 
+              className={`stripe-tab ${!showSubscriptions ? 'active' : ''}`}
+              onClick={() => setShowSubscriptions(false)}
+            >
+              <Zap size={16} />
+              One-Time Credits
+            </button>
+            <button 
+              className={`stripe-tab ${showSubscriptions ? 'active' : ''}`}
+              onClick={() => setShowSubscriptions(true)}
+            >
+              <Infinity size={16} />
+              Subscriptions
+            </button>
+          </div>
+          
           {loading ? (
             <div className="stripe-loading">
               <Loader2 size={32} className="spin" />
@@ -85,11 +141,13 @@ export default function StripeCheckout({ userId, email, onClose, onSuccess }) {
           ) : (
             <>
               <p className="stripe-desc">
-                Select a credit package to continue your neuro-virality analysis
+                {showSubscriptions 
+                  ? 'Subscribe for monthly scans. Cancel anytime.' 
+                  : 'Purchase credits for one-time use'}
               </p>
 
               <div className="stripe-packages">
-                {packageList.map((pkg) => (
+                {(showSubscriptions ? subscriptionPlans : creditPackages).map((pkg) => (
                   <div
                     key={pkg.id}
                     className={`stripe-package ${pkg.popular ? 'popular' : ''}`}
@@ -106,8 +164,17 @@ export default function StripeCheckout({ userId, email, onClose, onSuccess }) {
                     </div>
                     <p className="package-desc">{pkg.description}</p>
                     <div className="package-credits">
-                      <BoltIcon size={14} />
-                      {pkg.credits} scans included
+                      {pkg.isUnlimited ? (
+                        <>
+                          <Infinity size={14} />
+                          Unlimited scans
+                        </>
+                      ) : (
+                        <>
+                          <BoltIcon size={14} />
+                          {pkg.scans} scans included
+                        </>
+                      )}
                     </div>
                     <button
                       className="package-btn"
@@ -122,7 +189,7 @@ export default function StripeCheckout({ userId, email, onClose, onSuccess }) {
                       ) : (
                         <>
                           <CreditCard size={16} />
-                          Purchase
+                          {showSubscriptions ? 'Subscribe' : 'Purchase'}
                         </>
                       )}
                     </button>
@@ -224,6 +291,41 @@ export default function StripeCheckout({ userId, email, onClose, onSuccess }) {
 
           .stripe-modal-body {
             padding: 2rem;
+          }
+
+          .stripe-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            padding: 4px;
+          }
+
+          .stripe-tab {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 0.75rem 1rem;
+            background: transparent;
+            border: none;
+            border-radius: 10px;
+            color: var(--color-text-muted);
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+          }
+
+          .stripe-tab:hover {
+            color: var(--color-text);
+          }
+
+          .stripe-tab.active {
+            background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+            color: white;
           }
 
           .stripe-loading {

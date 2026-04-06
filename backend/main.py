@@ -768,6 +768,97 @@ async def get_checkout_status(request: Request, session_id: str):
         raise HTTPException(status_code=500, detail="Failed to retrieve checkout status")
 
 
+@app.get("/api/subscription/status")
+@limiter.limit("30/minute")
+async def get_subscription_status(request: Request):
+    """Get current user's subscription status"""
+    try:
+        auth_header = request.headers.get("authorization", "")
+        user_id = auth_service.get_user_id_from_token(auth_header)
+        
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        
+        supabase_url = os.getenv("SUPABASE_URL", "")
+        supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+        
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                f"{supabase_url}/rest/v1/rpc/get_user_subscription",
+                headers={
+                    "apikey": supabase_key,
+                    "Authorization": f"Bearer {supabase_key}",
+                    "Content-Type": "application/json"
+                },
+                json={}
+            )
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return {"has_subscription": False, "error": "Failed to fetch subscription"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Subscription status error: %s", e)
+        return {"has_subscription": False, "error": str(e)}
+
+
+@app.post("/api/subscription/cancel")
+@limiter.limit("10/minute")
+async def cancel_subscription(request: Request):
+    """Cancel current user's subscription at period end"""
+    try:
+        auth_header = request.headers.get("authorization", "")
+        user_id = auth_service.get_user_id_from_token(auth_header)
+        
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        
+        # Get user's subscription from DB
+        supabase_url = os.getenv("SUPABASE_URL", "")
+        supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+        
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                f"{supabase_url}/rest/v1/user_subscriptions",
+                headers={
+                    "apikey": supabase_key,
+                    "Authorization": f"Bearer {supabase_key}",
+                    "Content-Type": "application/json"
+                },
+                params={
+                    "user_id": f"eq.{user_id}",
+                    "status": "eq.active",
+                    "select": "stripe_subscription_id"
+                }
+            )
+            
+            if response.status_code == 200 and response.json():
+                sub = response.json()[0]
+                stripe_sub_id = sub.get("stripe_subscription_id")
+                
+                if stripe_sub_id and stripe_service.enabled:
+                    import stripe as stripe_lib
+                    stripe_lib.api_key = os.getenv("STRIPE_SECRET_KEY", "")
+                    try:
+                        stripe_lib.Subscription.modify(
+                            stripe_sub_id,
+                            cancel_at_period_end=True
+                        )
+                    except Exception as e:
+                        logger.error("Failed to cancel Stripe subscription: %s", e)
+                
+                return {"success": True, "message": "Subscription will be cancelled at period end"}
+            else:
+                raise HTTPException(status_code=404, detail="No active subscription found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Subscription cancellation error: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to cancel subscription")
+
+
 @app.post("/api/webhook/stripe")
 async def stripe_webhook(request: Request, stripe_signature: str = Header(None)):
     try:

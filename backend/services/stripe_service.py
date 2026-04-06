@@ -4,6 +4,10 @@ import httpx
 import stripe
 from typing import Dict, Any, Optional
 import threading
+from datetime import datetime
+import logging
+
+logger = logging.getLogger("neurox.stripe")
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
@@ -18,38 +22,107 @@ _cached_prices: Dict[str, str] = {}
 _price_cache_lock = threading.Lock()
 
 
-async def _add_credits_to_user(user_id: str, credits: int) -> bool:
-    """Add credits to user account via Supabase RPC (service role)"""
+async def _activate_subscription(user_id: str, subscription_data: Dict[str, Any]) -> bool:
+    """Activate/update user subscription in Supabase"""
     if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
-        print("[STRIPE] ERROR: Supabase credentials not configured for credit addition")
+        logger.error("[SUBSCRIPTION] Supabase credentials not configured")
         return False
     
     try:
-        headers = {
-            "apikey": SUPABASE_SERVICE_ROLE_KEY,
-            "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
-            "Content-Type": "application/json"
+        sub = subscription_data
+        plan_info = SUBSCRIPTION_PLANS.get(sub.get("plan_id", ""), {})
+        
+        period_start = datetime.fromtimestamp(sub.get("current_period_start", 0))
+        period_end = datetime.fromtimestamp(sub.get("current_period_end", 0))
+        
+        payload = {
+            "p_user_id": user_id,
+            "p_stripe_subscription_id": sub.get("subscription_id", ""),
+            "p_stripe_customer_id": sub.get("customer_id", ""),
+            "p_plan_id": sub.get("plan_id", ""),
+            "p_plan_name": plan_info.get("name", "Unknown"),
+            "p_scans_per_month": plan_info.get("scans_per_month", 0),
+            "p_is_unlimited": plan_info.get("is_unlimited", False),
+            "p_period_start": period_start.isoformat(),
+            "p_period_end": period_end.isoformat()
         }
         
         async with asyncio.timeout(10):
             async with httpx.AsyncClient() as client:
                 response = await client.post(
+                    f"{SUPABASE_URL}/rest/v1/rpc/activate_subscription",
+                    headers={
+                        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+                        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+                        "Content-Type": "application/json"
+                    },
+                    json=payload
+                )
+                
+                if response.status_code in (200, 201):
+                    logger.info("[SUBSCRIPTION] Activated subscription for user %s: %s", user_id, sub.get("plan_id"))
+                    return True
+                else:
+                    logger.error("[SUBSCRIPTION] Failed to activate: %s", response.text)
+                    return False
+    except Exception as e:
+        logger.error("[SUBSCRIPTION] Error activating subscription: %s", e)
+        return False
+
+
+async def _cancel_subscription(user_id: str, subscription_id: str) -> bool:
+    """Cancel user subscription in Supabase"""
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        return False
+    
+    try:
+        async with asyncio.timeout(10):
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{SUPABASE_URL}/rest/v1/rpc/cancel_subscription_immediately",
+                    headers={
+                        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+                        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "p_user_id": user_id,
+                        "p_stripe_subscription_id": subscription_id
+                    }
+                )
+                return response.status_code in (200, 201)
+    except Exception as e:
+        logger.error("[SUBSCRIPTION] Error cancelling: %s", e)
+        return False
+
+
+async def _add_credits_to_user(user_id: str, credits: int) -> bool:
+    """Add credits to user account via Supabase RPC (service role)"""
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        logger.error("[STRIPE] Supabase credentials not configured for credit addition")
+        return False
+    
+    try:
+        async with asyncio.timeout(10):
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
                     f"{SUPABASE_URL}/rest/v1/rpc/buy_credits",
-                    headers=headers,
+                    headers={
+                        "apikey": SUPABASE_SERVICE_ROLE_KEY,
+                        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+                        "Content-Type": "application/json"
+                    },
                     json={"amount": credits}
                 )
                 
                 if response.status_code in (200, 201):
-                    print(f"[STRIPE] Successfully added {credits} credits to user {user_id}")
+                    logger.info("[STRIPE] Added %s credits to user %s", credits, user_id)
                     return True
                 else:
-                    print(f"[STRIPE] ERROR: Failed to add credits - {response.status_code}: {response.text}")
+                    logger.error("[STRIPE] Failed to add credits: %s", response.text)
                     return False
-    except asyncio.TimeoutError:
-        print("[STRIPE] ERROR: Timeout adding credits to user")
-        return False
     except Exception as e:
-        print(f"[STRIPE] ERROR: Exception adding credits: {e}")
+        logger.error("[STRIPE] Error adding credits: %s", e)
         return False
 
 
@@ -123,13 +196,34 @@ def _get_or_create_price(plan_id: str, price_cents: int, product_name: str) -> s
         return price.id
 
 CREDIT_PACKAGES = {
-    "credits_10": {"name": "10 Scans", "credits": 10, "price_cents": 1500, "price_display": "$15"},
-    "credits_50": {"name": "50 Scans", "credits": 50, "price_cents": 4900, "price_display": "$49"},
-    "credits_200": {"name": "200 Scans", "credits": 200, "price_cents": 9900, "price_display": "$99"},
+    "starter": {"name": "Starter", "credits": 5, "price_cents": 999, "price_display": "$9.99"},
+    "popular": {"name": "Popular", "credits": 20, "price_cents": 2499, "price_display": "$24.99"},
+    "value": {"name": "Value", "credits": 50, "price_cents": 3999, "price_display": "$39.99"},
+    "pro": {"name": "Pro", "credits": 100, "price_cents": 5999, "price_display": "$59.99"},
 }
 
 SUBSCRIPTION_PLANS = {
-    "prime_monthly": {"name": "Prime Operator", "credits_per_month": 999, "price_cents": 2900, "price_display": "$29/mo"},
+    "hobby_monthly": {
+        "name": "Hobby",
+        "scans_per_month": 50,
+        "price_cents": 999,
+        "price_display": "$9.99/mo",
+        "is_unlimited": False
+    },
+    "pro_monthly": {
+        "name": "Pro",
+        "scans_per_month": 200,
+        "price_cents": 2499,
+        "price_display": "$24.99/mo",
+        "is_unlimited": False
+    },
+    "enterprise_monthly": {
+        "name": "Enterprise",
+        "scans_per_month": 999999,
+        "price_cents": 4999,
+        "price_display": "$49.99/mo",
+        "is_unlimited": True
+    },
 }
 
 
@@ -234,17 +328,51 @@ class StripeService:
         
         with _webhook_lock:
             if _is_webhook_processed(event_id):
-                print(f"[WEBHOOK] Duplicate event already processed: {event_id}")
+                logger.info("[WEBHOOK] Duplicate event: %s", event_id)
                 return {"event": "duplicate", "message": "Event already processed"}
             
             _mark_webhook_processed(event_id)
 
+        # Handle checkout.session.completed (both credits and subscriptions)
         if event["type"] == "checkout.session.completed":
             session = event["data"]["object"]
             metadata = session.get("metadata", {})
             user_id = metadata.get("user_id")
-            credits = int(metadata.get("credits", 0))
             
+            # Check if it's a subscription purchase
+            plan_id = metadata.get("plan_id")
+            if plan_id and plan_id in SUBSCRIPTION_PLANS:
+                plan = SUBSCRIPTION_PLANS[plan_id]
+                stripe_sub_id = session.get("subscription")
+                stripe_customer_id = session.get("customer")
+                
+                # Get subscription details for period dates
+                if stripe_sub_id:
+                    try:
+                        stripe_sub = stripe.Subscription.retrieve(stripe_sub_id)
+                        current_period_start = stripe_sub.get("current_period_start", 0)
+                        current_period_end = stripe_sub.get("current_period_end", 0)
+                        
+                        await _activate_subscription(user_id, {
+                            "subscription_id": stripe_sub_id,
+                            "customer_id": stripe_customer_id,
+                            "plan_id": plan_id,
+                            "current_period_start": current_period_start,
+                            "current_period_end": current_period_end
+                        })
+                    except Exception as e:
+                        logger.error("[WEBHOOK] Failed to activate subscription: %s", e)
+                
+                return {
+                    "event": "subscription_purchased",
+                    "user_id": user_id,
+                    "plan_id": plan_id,
+                    "plan_name": plan.get("name"),
+                    "session_id": session["id"],
+                }
+            
+            # Handle credit purchase (one-time)
+            credits = int(metadata.get("credits", 0))
             if user_id and credits > 0:
                 await _add_credits_to_user(user_id, credits)
             
@@ -256,18 +384,69 @@ class StripeService:
                 "session_id": session["id"],
             }
 
+        # Handle subscription renewal (invoice paid)
         elif event["type"] == "invoice.paid":
             invoice = event["data"]["object"]
+            stripe_sub_id = invoice.get("subscription")
+            stripe_customer_id = invoice.get("customer")
+            
+            if stripe_sub_id:
+                try:
+                    stripe_sub = stripe.Subscription.retrieve(stripe_sub_id)
+                    plan_id = stripe_sub.get("items", {}).get("data", [{}])[0].get("price", {}).get("id", "")
+                    
+                    # Find matching plan
+                    matched_plan = None
+                    sub_items = stripe_sub.get("items", {}).get("data", [])
+                    if sub_items:
+                        unit_amount = sub_items[0].get("price", {}).get("unit_amount", 0)
+                        for pid, pinfo in SUBSCRIPTION_PLANS.items():
+                            if str(pinfo.get("price_cents")) == str(unit_amount):
+                                matched_plan = pid
+                                break
+                    
+                    if matched_plan:
+                        current_period_start = stripe_sub.get("current_period_start", 0)
+                        current_period_end = stripe_sub.get("current_period_end", 0)
+                        
+                        # Find user by customer ID (need to query subscriptions table)
+                        # For now, we log - in production you'd lookup user_id from customer_id
+                        logger.info("[WEBHOOK] Subscription renewed: %s", stripe_sub_id)
+                        
+                except Exception as e:
+                    logger.error("[WEBHOOK] Failed to process renewal: %s", e)
+            
             return {
                 "event": "subscription_renewed",
                 "customer_email": invoice.get("customer_email"),
                 "amount": invoice.get("amount_paid"),
             }
 
+        # Handle subscription cancellation
         elif event["type"] == "customer.subscription.deleted":
+            subscription = event["data"]["object"]
+            stripe_sub_id = subscription.get("id")
+            
+            # Find and cancel subscription in our DB
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.post(
+                        f"{SUPABASE_URL}/rest/v1/rpc/cancel_subscription_immediately",
+                        headers={
+                            "apikey": SUPABASE_SERVICE_ROLE_KEY,
+                            "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+                            "Content-Type": "application/json"
+                        },
+                        json={
+                            "p_stripe_subscription_id": stripe_sub_id
+                        }
+                    )
+            except Exception as e:
+                logger.error("[WEBHOOK] Failed to cancel subscription: %s", e)
+            
             return {
                 "event": "subscription_cancelled",
-                "subscription_id": event["data"]["object"]["id"],
+                "subscription_id": stripe_sub_id,
             }
 
         return {"event": event["type"]}
