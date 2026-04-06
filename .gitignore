@@ -1,0 +1,27 @@
+node_modules
+dist
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+
+# Secrets - NEVER commit
+keys.json
+*.key
+*.pem
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Temp files
+backend/temp/
+logs.json
+auth_config.json
+project_info.json
+auth_logs.json
+
+.vercel
+supabase/.temp/
