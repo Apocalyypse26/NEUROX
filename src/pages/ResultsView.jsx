@@ -229,8 +229,8 @@ export default function ResultsView({ session }) {
     const rand = (n) => ((seed * (n + 1) * 9301 + 49297) % 233280) / 233280;
     
     return {
-      global_score: Math.floor(60 + rand(1) * 38),
-      sub_scores: [
+      globalScore: Math.floor(60 + rand(1) * 38),
+      subScores: [
         { name: "Attention Pull", val: Math.floor(40 + rand(2) * 59) },
         { name: "Visual Impact", val: Math.floor(40 + rand(3) * 59) },
         { name: "Text Clarity", val: Math.floor(40 + rand(4) * 59) },
@@ -245,7 +245,9 @@ export default function ResultsView({ session }) {
         "Adjust saturation levels",
         "Center text layout",
         "Add glowing elements"
-      ]
+      ],
+      bestPlatform: ["X/Twitter", "TikTok", "Instagram", "YouTube"][Math.floor(rand(9) * 4)],
+      dropOffRisk: rand(10) * 0.8
     };
   }
 
