@@ -153,8 +153,6 @@ export default function ResultsView({ session }) {
   const executeAnalysisHook = async (targetData) => {
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-      console.log('[ANALYSIS] Starting analysis, API URL:', apiUrl);
-      console.log('[ANALYSIS] Calling /api/analyze endpoint...');
       setAnalysisStatus('analyzing');
       
       const { data: { session } } = await supabase.auth.getSession();
@@ -174,11 +172,8 @@ export default function ResultsView({ session }) {
           })
         });
         
-        console.log('[ANALYSIS] Response status:', analyzeRes.status);
-        
         if (analyzeRes.ok) {
           const result = await analyzeRes.json();
-          console.log('[ANALYSIS] Analysis complete:', result);
           const normalized = normalizeScoreData(result);
           setAnalysisData(normalized);
           setAnalysisStatus('complete');
@@ -188,11 +183,9 @@ export default function ResultsView({ session }) {
         }
         
         const errText = await analyzeRes.text();
-        console.error('[ANALYSIS] Analysis failed:', analyzeRes.status, errText);
         
         // Try analyze-sync as fallback
         if (!errText.includes("FEATURE_DISABLED")) {
-          console.log('[ANALYSIS] Trying /api/analyze-sync...');
           const syncRes = await fetch(`${apiUrl}/api/analyze-sync`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -206,7 +199,6 @@ export default function ResultsView({ session }) {
           
           if (syncRes.ok) {
             const result = await syncRes.json();
-            console.log('[ANALYSIS] Sync analysis complete:', result);
             const normalized = normalizeScoreData(result);
             setAnalysisData(normalized);
             setAnalysisStatus('complete');
@@ -217,17 +209,13 @@ export default function ResultsView({ session }) {
         }
         
         // If all APIs fail, generate mock result
-        console.log('[ANALYSIS] All APIs failed, using mock result');
         const mockResult = generateMockResult(targetData.id);
         setAnalysisData(mockResult);
         setAnalysisStatus('complete');
         await supabase.from('uploads').update({ score_data: mockResult }).eq('id', targetData.id);
         
       } catch (fetchErr) {
-        console.error('[ANALYSIS] Fetch error:', fetchErr.message);
-        
         // Generate mock result on complete failure
-        console.log('[ANALYSIS] Using mock result due to fetch error');
         const mockResult = generateMockResult(targetData.id);
         setAnalysisData(mockResult);
         setAnalysisStatus('complete');
@@ -235,7 +223,6 @@ export default function ResultsView({ session }) {
       }
       
     } catch (e) {
-      console.error('[ANALYSIS] Error:', e);
       // Generate mock result
       const mockResult = generateMockResult(targetData.id);
       setAnalysisData(mockResult);
