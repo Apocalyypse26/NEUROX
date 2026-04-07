@@ -320,10 +320,10 @@ async def health_check():
         status = "degraded"
     
     try:
-        gemini_key = os.getenv("GEMINI_API_KEY", "")
-        checks["gemini"] = "configured" if gemini_key else "not_configured"
+        openai_key = os.getenv("OPENAI_API_KEY", "")
+        checks["openai"] = "configured" if openai_key else "not_configured"
     except Exception:
-        checks["gemini"] = "unknown"
+        checks["openai"] = "unknown"
     
     active_jobs = len([j for j in job_manager.jobs.values() if j.status not in [JobStatus.COMPLETED, JobStatus.FAILED]])
     
