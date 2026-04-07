@@ -138,15 +138,36 @@ export default function ResultsView({ session }) {
       console.log('[ANALYSIS] Calling /api/analyze endpoint...');
       setAnalysisStatus('analyzing');
       
-      const analyzeRes = await fetch(`${apiUrl}/api/analyze`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          upload_id: targetData.id,
-          media_type: targetData.media_type,
-          file_url: targetData.file_url
-        })
-      });
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id || 'anonymous';
+      
+      // Try analyze endpoint first
+      let analyzeRes;
+      try {
+        analyzeRes = await fetch(`${apiUrl}/api/analyze`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            upload_id: targetData.id,
+            user_id: userId,
+            media_type: targetData.media_type,
+            file_url: targetData.file_url
+          })
+        });
+      } catch (e) {
+        // If that fails, try analyze-sync (for development)
+        console.log('[ANALYSIS] /api/analyze failed, trying /api/analyze-sync...');
+        analyzeRes = await fetch(`${apiUrl}/api/analyze-sync`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            upload_id: targetData.id,
+            user_id: userId,
+            media_type: targetData.media_type,
+            file_url: targetData.file_url
+          })
+        });
+      }
       
       console.log('[ANALYSIS] Direct analysis response status:', analyzeRes.status);
       
