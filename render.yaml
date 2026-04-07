@@ -16,7 +16,7 @@ services:
       - key: USE_REAL_TRIBE
         value: false
       - key: ENVIRONMENT
-        value: production
+        value: development
       - key: CORS_ORIGINS
         value: https://www.neuroxscan.fun,https://neurogravity.vercel.app,https://neuroxscan.fun
       - key: PYTHON_VERSION
