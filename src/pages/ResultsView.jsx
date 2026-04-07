@@ -121,13 +121,32 @@ export default function ResultsView({ session }) {
     if (data) {
       setUpload(data)
       if (data.score_data) {
-        setAnalysisData(data.score_data)
+        // Normalize score_data from snake_case to camelCase
+        const normalized = normalizeScoreData(data.score_data)
+        setAnalysisData(normalized)
         setLoading(false)
       } else {
         await executeAnalysisHook(data)
       }
     } else {
       setLoading(false)
+    }
+  }
+  
+  const normalizeScoreData = (data) => {
+    if (!data) return null
+    // If already camelCase, return as-is
+    if (data.globalScore !== undefined) return data
+    
+    // Convert snake_case to camelCase
+    return {
+      globalScore: data.global_score,
+      subScores: data.sub_scores,
+      confidence: data.confidence,
+      rank: data.rank,
+      fixes: data.fixes,
+      bestPlatform: data.best_platform,
+      dropOffRisk: data.drop_off_risk
     }
   }
 
@@ -160,7 +179,8 @@ export default function ResultsView({ session }) {
         if (analyzeRes.ok) {
           const result = await analyzeRes.json();
           console.log('[ANALYSIS] Analysis complete:', result);
-          setAnalysisData(result);
+          const normalized = normalizeScoreData(result);
+          setAnalysisData(normalized);
           setAnalysisStatus('complete');
           await supabase.from('uploads').update({ score_data: result }).eq('id', targetData.id);
           setLoading(false);
@@ -187,7 +207,8 @@ export default function ResultsView({ session }) {
           if (syncRes.ok) {
             const result = await syncRes.json();
             console.log('[ANALYSIS] Sync analysis complete:', result);
-            setAnalysisData(result);
+            const normalized = normalizeScoreData(result);
+            setAnalysisData(normalized);
             setAnalysisStatus('complete');
             await supabase.from('uploads').update({ score_data: result }).eq('id', targetData.id);
             setLoading(false);
