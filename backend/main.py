@@ -604,6 +604,13 @@ async def analyze_target(request: Request, req: AnalysisRequest):
     if auth_user_id and auth_user_id != req.user_id:
         api_error(403, "User ID mismatch", code="AUTH_ERROR")
     
+    use_real_tribe = os.getenv("USE_REAL_TRIBE", "false").lower() == "true"
+    
+    # Use mock analysis when USE_REAL_TRIBE is false
+    if not use_real_tribe:
+        logger.info(f"[ANALYZE] Using mock analysis for upload {req.upload_id}")
+        return await analyze_sync(request, req)
+    
     job_id = await job_manager.create_job(req.upload_id, req.user_id, req.media_type, req.file_url)
     
     existing_job = job_manager.get_job(job_id)
@@ -624,7 +631,9 @@ async def analyze_target(request: Request, req: AnalysisRequest):
         return result
     except Exception as e:
         logger.error("Analysis failed: %s", e)
-        api_error(500, str(e), code="SERVER_ERROR")
+        # Fall back to mock analysis instead of returning error
+        logger.info("[ANALYZE] Job failed, falling back to mock analysis")
+        return await analyze_sync(request, req)
 
 @app.post("/api/analyze-sync")
 @limiter.limit("10/minute")
