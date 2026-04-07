@@ -138,130 +138,42 @@ export default function ResultsView({ session }) {
       
       setAnalysisStatus('preparing');
       
-      const existingJob = await getJobByUpload(targetData.id);
-      let jobId;
-      let jobToken = null;
-
-      if (existingJob && existingJob.status === 'completed') {
-        console.log('[ANALYSIS] Using cached result');
-        const result = existingJob.result;
-        setAnalysisData(result);
-        setAnalysisStatus('complete');
-        
-        await supabase.from('uploads').update({ score_data: result }).eq('id', targetData.id);
-        setLoading(false);
-        return;
-      }
-
-      if (existingJob && existingJob.status !== 'failed') {
-        jobId = existingJob.job_id;
-        setAnalysisStatus('polling');
-        
-        try {
-          console.log('[ANALYSIS] Resuming existing job:', jobId);
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.access_token) {
-            const tokenRes = await fetch(`${apiUrl}/api/jobs/${jobId}/token`, {
-              headers: { 'Authorization': `Bearer ${session.access_token}` }
-            });
-            console.log('[ANALYSIS] Token response status:', tokenRes.status);
-            if (tokenRes.ok) {
-              const tokenData = await tokenRes.json();
-              jobToken = tokenData.token;
-              console.log('[ANALYSIS] Got job token');
-            }
-          }
-        } catch (e) {
-          console.error('[ANALYSIS] Could not get job token:', e.message);
-        }
-      } else {
-        console.log('[ANALYSIS] Creating new job...');
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        try {
-          const createRes = await fetch(`${apiUrl}/api/jobs/create`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {})
-            },
-            body: JSON.stringify({
-              upload_id: targetData.id,
-              media_type: targetData.media_type,
-              file_url: targetData.file_url
-            })
-          });
-          
-          console.log('[ANALYSIS] Create job response status:', createRes.status);
-          
-          if (createRes.ok) {
-            const jobData = await createRes.json();
-            jobId = jobData.job_id;
-            jobToken = jobData.job_token;
-            setAnalysisStatus('processing');
-            console.log('[ANALYSIS] Job created:', jobId);
-          } else {
-            const errText = await createRes.text();
-            console.error('[ANALYSIS] Failed to create job:', createRes.status, errText);
-            jobId = null;
-          }
-        } catch (e) {
-          console.error('[ANALYSIS] Error creating job:', e.message, e);
-          jobId = null;
-        }
-      }
-
-      if (jobId && jobToken) {
-        sseRef.current = subscribeToJob(jobId, {
-          jobToken,
-          onProgress: (progress, status) => {
-            setJobProgress(progress);
-            if (status === 'processing') setAnalysisStatus('analyzing');
-            if (status === 'completed') setAnalysisStatus('complete');
-            if (status === 'failed') setAnalysisStatus('failed');
-          },
-          onComplete: (result) => {
-            setAnalysisData(result);
-            setAnalysisStatus('complete');
-            supabase.from('uploads').update({ score_data: result }).eq('id', targetData.id);
-            setLoading(false);
-          },
-          onError: (error) => {
-            console.error('[ANALYSIS] SSE error:', error);
-            setServerError(error);
-            setAnalysisStatus('failed');
-            setLoading(false);
-          }
+      // Skip job creation, go directly to synchronous analysis
+      console.log('[ANALYSIS] Calling direct analysis endpoint...');
+      setAnalysisStatus('analyzing');
+      
+      try {
+        const analyzeRes = await fetch(`${apiUrl}/api/analyze`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            upload_id: targetData.id,
+            media_type: targetData.media_type,
+            file_url: targetData.file_url
+          })
         });
-      } else {
-        // Fallback: try direct analysis endpoint
-        console.log('[ANALYSIS] No job created, attempting direct analysis');
-        try {
-          const analyzeRes = await fetch(`${apiUrl}/api/analyze`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              upload_id: targetData.id,
-              media_type: targetData.media_type,
-              file_url: targetData.file_url
-            })
-          });
-          
-          if (analyzeRes.ok) {
-            const result = await analyzeRes.json();
-            setAnalysisData(result);
-            setAnalysisStatus('complete');
-            await supabase.from('uploads').update({ score_data: result }).eq('id', targetData.id);
-          } else {
-            throw new Error('Analysis failed');
-          }
-        } catch (e) {
-          console.error('[ANALYSIS] Direct analysis error:', e);
-          setServerError('Analysis failed. Please try again.');
+        
+        console.log('[ANALYSIS] Direct analysis response status:', analyzeRes.status);
+        
+        if (analyzeRes.ok) {
+          const result = await analyzeRes.json();
+          console.log('[ANALYSIS] Analysis complete:', result);
+          setAnalysisData(result);
+          setAnalysisStatus('complete');
+          await supabase.from('uploads').update({ score_data: result }).eq('id', targetData.id);
+        } else {
+          const errText = await analyzeRes.text();
+          console.error('[ANALYSIS] Analysis failed:', analyzeRes.status, errText);
+          setServerError(`Analysis failed (${analyzeRes.status}): ${errText}`);
           setAnalysisStatus('failed');
         }
-        setLoading(false);
+      } catch (fetchErr) {
+        console.error('[ANALYSIS] Fetch error:', fetchErr.message, fetchErr);
+        setServerError(`Network error: ${fetchErr.message}`);
+        setAnalysisStatus('failed');
       }
+      
+      setLoading(false);
     } catch (e) {
       console.error('[ANALYSIS] Error:', e);
       setServerError(e.message || 'Analysis failed');
