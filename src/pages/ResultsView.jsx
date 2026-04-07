@@ -138,8 +138,9 @@ export default function ResultsView({ session }) {
       console.log('[ANALYSIS] Health check result:', apiHealth);
       
       if (!apiHealth) {
-        logger.error("[ANALYSIS] Backend unavailable");
-        setServerError("NEUROX backend is currently unavailable. Please try again in a few moments.");
+        const apiUrl = import.meta.env.VITE_API_URL || 'not set';
+        logger.error("[ANALYSIS] Backend unavailable - API URL:", apiUrl);
+        setServerError(`Backend unavailable. API URL: ${apiUrl}. Please try again in a few moments.`);
         setLoading(false);
         return;
       }
