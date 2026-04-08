@@ -329,7 +329,7 @@ async def health_check():
     
     return {
         "status": status,
-        "version": "2.0.0",
+        "version": "2.1.0-hybrid",
         "tribe_mode": "REAL" if USE_REAL_TRIBE else "MOCK",
         "jobs_active": active_jobs,
         "checks": checks
