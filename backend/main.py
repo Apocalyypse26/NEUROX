@@ -632,7 +632,10 @@ async def analyze_target(request: Request, req: AnalysisRequest):
         return result
         
     except Exception as e:
+        import traceback
+        error_tb = traceback.format_exc()
         logger.error(f"[ANALYZE] Pipeline failed: {type(e).__name__}: {str(e)}")
+        logger.error(f"[ANALYZE] Traceback: {error_tb}")
         # Deterministic fallback — always works, no external calls
         seed = sum(ord(c) for c in req.upload_id)
         base = 40 + (seed % 30)
@@ -650,10 +653,36 @@ async def analyze_target(request: Request, req: AnalysisRequest):
             "confidence": {"text": "EXPERIMENTAL", "color": "#8b5cf6"},
             "rank": "[WARNING] Analysis ran in fallback mode",
             "fixes": [
+                f"Pipeline error: {type(e).__name__}: {str(e)[:200]}",
                 "Re-upload for full analysis with AI refinement.",
-                "Ensure image is in JPEG/PNG/WebP format.",
                 "Try again in a moment — the service may be warming up."
-            ]
+            ],
+            "_debug": {
+                "error": f"{type(e).__name__}: {str(e)}",
+                "traceback": error_tb[-500:] if error_tb else "none"
+            }
+        }
+
+
+@app.post("/api/analyze-debug")
+async def analyze_debug(request: Request, req: AnalysisRequest):
+    """Debug endpoint that returns raw errors instead of fallback"""
+    import traceback
+    try:
+        job_id = await job_manager.create_job(req.upload_id + "-dbg", req.user_id, req.media_type, req.file_url)
+        result = await job_manager.run_job(
+            job_id,
+            preprocess_service.process_media,
+            ocr_service.extract_text,
+            tribe_service.analyze,
+            score_mapper.map
+        )
+        return {"status": "SUCCESS", "result": result}
+    except Exception as e:
+        return {
+            "status": "FAILED",
+            "error": f"{type(e).__name__}: {str(e)}",
+            "traceback": traceback.format_exc()
         }
 
 
