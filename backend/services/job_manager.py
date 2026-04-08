@@ -343,10 +343,11 @@ class JobManager:
                 self._safe_persist_job(job, update_only=True)
             
             seed = sum(ord(c) for c in job.upload_id)
-            # Pass cached media path and OCR results to tribe function with timeout
+            # Pass cached media path, OCR results, and extracted features to tribe function
             try:
                 tribe_output = await asyncio.wait_for(
-                    tribe_func(media_path, job.media_type, seed, ocr_result.text),
+                    tribe_func(media_path, job.media_type, seed, ocr_result.text,
+                               preprocess_result.features),
                     timeout=self._tribe_timeout
                 )
                 tribe_output.ocr_text = ocr_result.text

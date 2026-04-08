@@ -6,14 +6,9 @@ pillow>=12.1.1
 python-multipart>=0.0.18
 slowapi==0.1.9
 pydantic==2.9.0
-numpy==1.26.4
 stripe==11.3.0
 openai>=1.0.0
 python-dotenv==1.0.0
 PyJWT>=2.10.1
-easyocr==1.7.0
-ffmpeg-python==0.2.0
-torch>=2.0.0
-opencv-python>=4.8.0
 pytest>=7.0.0
 pytest-asyncio>=0.21.0

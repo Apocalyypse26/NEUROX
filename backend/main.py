@@ -604,20 +604,10 @@ async def analyze_target(request: Request, req: AnalysisRequest):
     if auth_user_id and auth_user_id != req.user_id:
         api_error(403, "User ID mismatch", code="AUTH_ERROR")
     
-    use_real_tribe = os.getenv("USE_REAL_TRIBE", "false").lower() == "true"
-    
     logger.info(f"[ANALYZE] Request: upload_id={req.upload_id}, media_type={req.media_type}")
-    logger.info(f"[ANALYZE] USE_REAL_TRIBE={use_real_tribe}")
     logger.info(f"[ANALYZE] file_url={req.file_url[:100]}...")
     
-    # If USE_REAL_TRIBE is false, use mock
-    if not use_real_tribe:
-        logger.info(f"[ANALYZE] Using mock analysis (USE_REAL_TRIBE=false)")
-        return await analyze_sync(request, req)
-    
-    # Try the real pipeline
     try:
-        logger.info(f"[ANALYZE] Creating job for upload: {req.upload_id}")
         job_id = await job_manager.create_job(req.upload_id, req.user_id, req.media_type, req.file_url)
         logger.info(f"[ANALYZE] Created job: {job_id}")
         
@@ -629,7 +619,7 @@ async def analyze_target(request: Request, req: AnalysisRequest):
         if existing_job and existing_job.status != JobStatus.PENDING:
             api_error(409, "Job already in progress", code="CONFLICT")
         
-        logger.info(f"[ANALYZE] Running full job pipeline for: {job_id}")
+        logger.info(f"[ANALYZE] Running hybrid pipeline for: {job_id}")
         result = await job_manager.run_job(
             job_id,
             preprocess_service.process_media,
@@ -637,31 +627,35 @@ async def analyze_target(request: Request, req: AnalysisRequest):
             tribe_service.analyze,
             score_mapper.map
         )
-        logger.info(f"[ANALYZE] Job completed successfully with score: {result.get('globalScore', 'unknown')}")
+        mode = result.get("rawTribeData", {}).get("mode", "unknown")
+        logger.info(f"[ANALYZE] Completed (mode={mode}) score={result.get('globalScore', '?')}")
         return result
         
     except Exception as e:
         logger.error(f"[ANALYZE] Pipeline failed: {type(e).__name__}: {str(e)}")
-        logger.info("[ANALYZE] Falling back to mock analysis due to pipeline failure")
-        try:
-            # Try to get mock result
-            return await analyze_sync(request, req)
-        except Exception as fallback_error:
-            # If fallback also fails, return a valid response
-            logger.error(f"[ANALYZE] Fallback also failed: {fallback_error}")
-            return {
-                "globalScore": 50,
-                "subScores": [
-                    {"name": "Attention Pull", "val": 50},
-                    {"name": "Visual Impact", "val": 50},
-                    {"name": "Text Clarity", "val": 50},
-                    {"name": "Meme Strength", "val": 50},
-                    {"name": "Crypto Relevance", "val": 50}
-                ],
-                "confidence": {"text": "EXPERIMENTAL", "color": "#8b5cf6"},
-                "rank": "[BETA] Analysis unavailable",
-                "fixes": ["Service temporarily unavailable"]
-            }
+        # Deterministic fallback — always works, no external calls
+        seed = sum(ord(c) for c in req.upload_id)
+        base = 40 + (seed % 30)
+        return {
+            "globalScore": base,
+            "subScores": [
+                {"name": "Hook Score", "val": 35 + (seed % 25)},
+                {"name": "Peak Response", "val": 40 + (seed % 20)},
+                {"name": "Sustained Attention", "val": 30 + (seed % 25)},
+                {"name": "Ending Strength", "val": 25 + (seed % 30)},
+                {"name": "Visual Punch", "val": 35 + (seed % 25)},
+                {"name": "Emotion Spike", "val": 20 + (seed % 20)},
+                {"name": "Readability Blend", "val": 30 + (seed % 20)}
+            ],
+            "confidence": {"text": "EXPERIMENTAL", "color": "#8b5cf6"},
+            "rank": "[WARNING] Analysis ran in fallback mode",
+            "fixes": [
+                "Re-upload for full analysis with AI refinement.",
+                "Ensure image is in JPEG/PNG/WebP format.",
+                "Try again in a moment — the service may be warming up."
+            ]
+        }
+
 
 @app.post("/api/analyze-sync")
 @limiter.limit("10/minute")
