@@ -117,19 +117,35 @@ export default function ResultsView({ session }) {
   }, [uploadId])
 
   const fetchUpload = async () => {
-    const { data } = await supabase.from('uploads').select('*, projects(id, name)').eq('id', uploadId).single()
-    if (data) {
-      setUpload(data)
-      if (data.score_data) {
-        // Normalize score_data from snake_case to camelCase
-        const normalized = normalizeScoreData(data.score_data)
-        setAnalysisData(normalized)
-        setLoading(false)
-      } else {
-        await executeAnalysisHook(data)
+    console.log('[ResultsView] Fetching upload:', uploadId);
+    try {
+      const { data, error } = await supabase.from('uploads').select('*, projects(id, name)').eq('id', uploadId).single()
+      console.log('[ResultsView] Supabase response - data:', data, 'error:', error);
+      
+      if (error) {
+        console.error('[ResultsView] Supabase error:', error);
+        setServerError(`Database error: ${error.message}`);
+        setLoading(false);
+        return;
       }
-    } else {
-      setLoading(false)
+      
+      if (data) {
+        setUpload(data)
+        if (data.score_data) {
+          // Normalize score_data from snake_case to camelCase
+          const normalized = normalizeScoreData(data.score_data)
+          setAnalysisData(normalized)
+          setLoading(false)
+        } else {
+          await executeAnalysisHook(data)
+        }
+      } else {
+        setLoading(false)
+      }
+    } catch (err) {
+      console.error('[ResultsView] Fetch error:', err);
+      setServerError(`Failed to load: ${err.message}`);
+      setLoading(false);
     }
   }
   
