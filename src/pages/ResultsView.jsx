@@ -190,6 +190,7 @@ export default function ResultsView({ session }) {
         
         if (analyzeRes.ok) {
           const result = await analyzeRes.json();
+          console.log('[ANALYSIS] Real analysis result:', result);
           const normalized = normalizeScoreData(result);
           setAnalysisData(normalized);
           setAnalysisStatus('complete');
@@ -199,9 +200,11 @@ export default function ResultsView({ session }) {
         }
         
         const errText = await analyzeRes.text();
+        console.error('[ANALYSIS] /api/analyze failed:', analyzeRes.status, errText);
         
-        // Try analyze-sync as fallback
-        if (!errText.includes("FEATURE_DISABLED")) {
+        // Try analyze-sync as fallback (only for development)
+        if (!errText.includes("FEATURE_DISABLED") && analyzeRes.status !== 500) {
+          console.log('[ANALYSIS] Trying /api/analyze-sync...');
           const syncRes = await fetch(`${apiUrl}/api/analyze-sync`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -215,6 +218,7 @@ export default function ResultsView({ session }) {
           
           if (syncRes.ok) {
             const result = await syncRes.json();
+            console.log('[ANALYSIS] Sync analysis result:', result);
             const normalized = normalizeScoreData(result);
             setAnalysisData(normalized);
             setAnalysisStatus('complete');
@@ -224,11 +228,15 @@ export default function ResultsView({ session }) {
           }
         }
         
-        // If all APIs fail, generate mock result
-        const mockResult = generateMockResult(targetData.id);
-        setAnalysisData(mockResult);
-        setAnalysisStatus('complete');
-        await supabase.from('uploads').update({ score_data: mockResult }).eq('id', targetData.id);
+        // If real pipeline fails, show error instead of mock
+        console.error('[ANALYSIS] Both APIs failed. Showing error to user.');
+        let errorMsg = `Analysis failed (${analyzeRes.status})`;
+        try {
+          const errJson = JSON.parse(errText);
+          errorMsg = errJson.detail || errJson.message || errorMsg;
+        } catch {}
+        setServerError(errorMsg);
+        setAnalysisStatus('failed');
         
       } catch (fetchErr) {
         // Generate mock result on complete failure
