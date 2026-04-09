@@ -186,51 +186,40 @@ export default function ResultsView({ session }) {
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id || 'anonymous';
       
-      // Try analyze endpoint first
-      let analyzeRes;
-      try {
-        analyzeRes = await fetch(`${apiUrl}/api/analyze`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            upload_id: targetData.id,
-            user_id: userId,
-            media_type: targetData.media_type,
-            file_url: targetData.file_url
-          })
-        });
-        
-        if (analyzeRes.ok) {
-          const result = await analyzeRes.json();
-          console.log('[ANALYSIS] Real analysis result:', result);
-          const normalized = normalizeScoreData(result);
-          setAnalysisData(normalized);
-          setAnalysisStatus('complete');
-          await supabase.from('uploads').update({ score_data: result }).eq('id', targetData.id);
-          setLoading(false);
-          return;
-        }
-        
-        const errText = await analyzeRes.text();
-        console.error('[ANALYSIS] /api/analyze failed:', analyzeRes.status, errText);
-        
-        // Try analyze-sync as fallback (only for development)
-        if (!errText.includes("FEATURE_DISABLED") && analyzeRes.status !== 500) {
-          console.log('[ANALYSIS] Trying /api/analyze-sync...');
-          const syncRes = await fetch(`${apiUrl}/api/analyze-sync`, {
+      const requestBody = JSON.stringify({
+        upload_id: targetData.id,
+        user_id: userId,
+        media_type: targetData.media_type,
+        file_url: targetData.file_url
+      });
+
+      // Retry up to 3 times — Render free tier cold starts can take 30s+
+      const MAX_RETRIES = 3;
+      let lastError = null;
+      
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          if (attempt > 1) {
+            setAnalysisStatus('warming_up');
+            console.log(`[ANALYSIS] Retry attempt ${attempt}/${MAX_RETRIES} — server may be warming up...`);
+            await new Promise(r => setTimeout(r, 3000)); // wait 3s between retries
+          }
+          
+          const controller = new AbortController();
+          const timeoutMs = attempt === 1 ? 30000 : 60000; // 30s first try, 60s retries
+          const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+          
+          const analyzeRes = await fetch(`${apiUrl}/api/analyze`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              upload_id: targetData.id,
-              user_id: userId,
-              media_type: targetData.media_type,
-              file_url: targetData.file_url
-            })
+            body: requestBody,
+            signal: controller.signal
           });
+          clearTimeout(timeoutId);
           
-          if (syncRes.ok) {
-            const result = await syncRes.json();
-            console.log('[ANALYSIS] Sync analysis result:', result);
+          if (analyzeRes.ok) {
+            const result = await analyzeRes.json();
+            console.log('[ANALYSIS] Real analysis result:', result);
             const normalized = normalizeScoreData(result);
             setAnalysisData(normalized);
             setAnalysisStatus('complete');
@@ -238,31 +227,37 @@ export default function ResultsView({ session }) {
             setLoading(false);
             return;
           }
+          
+          // Non-OK response — don't retry HTTP errors, they won't change
+          const errText = await analyzeRes.text();
+          console.error('[ANALYSIS] /api/analyze failed:', analyzeRes.status, errText);
+          let errorMsg = `Analysis failed (${analyzeRes.status})`;
+          try {
+            const errJson = JSON.parse(errText);
+            errorMsg = errJson.detail || errJson.message || errorMsg;
+          } catch {}
+          setServerError(errorMsg);
+          setAnalysisStatus('failed');
+          setLoading(false);
+          return;
+          
+        } catch (fetchErr) {
+          lastError = fetchErr;
+          console.warn(`[ANALYSIS] Attempt ${attempt} failed:`, fetchErr.message);
+          // Continue to next retry
         }
-        
-        // If real pipeline fails, show error instead of mock
-        console.error('[ANALYSIS] Both APIs failed. Showing error to user.');
-        let errorMsg = `Analysis failed (${analyzeRes.status})`;
-        try {
-          const errJson = JSON.parse(errText);
-          errorMsg = errJson.detail || errJson.message || errorMsg;
-        } catch {}
-        setServerError(errorMsg);
-        setAnalysisStatus('failed');
-        
-      } catch (fetchErr) {
-        // Generate mock result on complete failure
-        const mockResult = generateMockResult(targetData.id);
-        setAnalysisData(mockResult);
-        setAnalysisStatus('complete');
-        await supabase.from('uploads').update({ score_data: mockResult }).eq('id', targetData.id);
       }
       
+      // All retries exhausted — show error, NEVER generate mock data
+      console.error('[ANALYSIS] All retries failed:', lastError?.message);
+      setServerError('Analysis server is starting up. Please wait 30 seconds and try again.');
+      setAnalysisStatus('failed');
+      
     } catch (e) {
-      // Generate mock result
-      const mockResult = generateMockResult(targetData.id);
-      setAnalysisData(mockResult);
-      setAnalysisStatus('complete');
+      // Show actual error — NEVER silently generate mock data
+      console.error('[ANALYSIS] Unexpected error:', e);
+      setServerError(`Analysis error: ${e.message || 'Unknown error'}. Please try again.`);
+      setAnalysisStatus('failed');
     }
     
     setLoading(false);
@@ -357,6 +352,8 @@ export default function ResultsView({ session }) {
     const statusMessages = {
       'initializing': { title: 'Initializing...', subtitle: 'Preparing analysis pipeline' },
       'preparing': { title: 'Connecting to NEUROX...', subtitle: 'Establishing neural link' },
+      'analyzing': { title: 'Analyzing Content...', subtitle: 'Running hybrid TRIBE pipeline' },
+      'warming_up': { title: 'Server Warming Up...', subtitle: 'Retrying connection — this takes ~30 seconds on cold start' },
       'creating': { title: 'Creating Analysis Job...', subtitle: 'Initializing TRIBE pipeline' },
       'polling': { title: 'Analyzing Content...', subtitle: `TRIBE v2 Processing (${jobProgress}%)` },
       'pending': { title: 'Job Queued...', subtitle: 'Waiting for processing' },
