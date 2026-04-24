@@ -29,8 +29,13 @@ export default function StripeCheckout({ userId, email, onClose, onSuccess }) {
     setProcessing(packageId)
     setError('')
     try {
-      const { url } = await createCheckoutSession(packageId, userId, email)
-      window.location.href = url
+      const result = await createCheckoutSession(packageId, userId, email)
+      if (!result?.url) {
+        setError('Failed to initialize checkout. Please try again.')
+        setProcessing(null)
+        return
+      }
+      window.location.href = result.url
     } catch (err) {
       setError(err.message || 'Failed to start checkout')
       setProcessing(null)

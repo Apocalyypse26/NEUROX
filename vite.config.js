@@ -7,11 +7,19 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: false,
     minify: 'esbuild',
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
-        assetFileNames: 'assets/[name]-[hash].[ext]'
+        assetFileNames: 'assets/[name]-[hash].[ext]',
+        manualChunks(id) {
+          if (id.includes('node_modules/react') || id.includes('node_modules/react-router')) return 'vendor-react'
+          if (id.includes('node_modules/motion')) return 'vendor-motion'
+          if (id.includes('node_modules/ogl')) return 'vendor-ogl'
+          if (id.includes('node_modules/lucide') || id.includes('node_modules/unicornstudio')) return 'vendor-ui'
+          if (id.includes('node_modules/@supabase') || id.includes('node_modules/@vercel')) return 'vendor-services'
+        }
       }
     }
   },

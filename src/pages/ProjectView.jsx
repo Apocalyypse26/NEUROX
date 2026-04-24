@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { validateVideo, verifyAndCredit } from '../lib/api'
 import { useDropzone } from 'react-dropzone'
 import { logger } from '../lib/logger'
-import StripeCheckout from '../components/StripeCheckout'
 import ConfirmModal from '../components/ConfirmModal'
+const StripeCheckout = lazy(() => import('../components/StripeCheckout'))
 import MediaCard from '../components/MediaCard'
 import { 
   ChevronLeft, Upload, AlertCircle, 
@@ -83,7 +83,7 @@ export default function ProjectView({ session }) {
       }
       window.history.replaceState({}, '', window.location.pathname)
     }
-  }, [projectId])
+  }, [projectId]) // eslint-disable-line react-hooks/exhaustive-deps — init effect, runs once per projectId change
 
   const verifyPayment = async (sessionId) => {
     try {
@@ -106,6 +106,7 @@ export default function ProjectView({ session }) {
   }
 
   const fetchProfile = async () => {
+    if (!session?.user?.id) return
     setCreditsLoading(true)
     try {
       const { data, error } = await supabase
@@ -323,7 +324,7 @@ export default function ProjectView({ session }) {
         .from('uploads')
         .insert([{
           project_id: projectId,
-          user_id: session.user.id,
+          user_id: session?.user?.id,
           file_name: file.name,
           file_url: publicUrlData.publicUrl,
           media_type: isVideo ? 'video' : 'image',
@@ -547,12 +548,14 @@ export default function ProjectView({ session }) {
       </main>
 
       {showStripe && (
-        <StripeCheckout
-          userId={session.user.id}
-          email={session.user.email}
-          onClose={() => setShowStripe(false)}
-          onSuccess={handleStripeSuccess}
-        />
+        <Suspense fallback={null}>
+          <StripeCheckout
+            userId={session?.user?.id}
+            email={session?.user?.email}
+            onClose={() => setShowStripe(false)}
+            onSuccess={handleStripeSuccess}
+          />
+        </Suspense>
       )}
 
       <ConfirmModal

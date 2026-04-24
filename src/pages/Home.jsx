@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import EvilEye from '../components/EvilEye';
+import React, { useEffect, useState, lazy, Suspense } from 'react';
 import '../../style.css';
+
+const EvilEye = lazy(() => import('../components/EvilEye'));
 import { Link } from 'react-router-dom';
 import { Brain, Target, Shield, ChevronDown, Sparkles, TrendingUp, BookOpen } from 'lucide-react';
 import BoltIcon from '../components/BoltIcon';
+import { motion } from "motion/react";
 
 const AnimatedCounter = ({ end, duration = 2000, suffix = '' }) => {
   const [count, setCount] = useState(0);
@@ -39,21 +41,22 @@ export default function Home() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   
-const memeImages = [
-    { src: '/token_logo_sample.png', alt: 'Token Logo', scanTag: 'TOKEN_SCAN', modelTag: 'TRUST_V2' },
-    { src: '/token_banner_sample.png', alt: 'Token Banner', scanTag: 'ASSET_SCAN', modelTag: 'PATTERN_V2' },
-    { src: '/token_site_sample.png', alt: 'Token Website', scanTag: 'LAUNCH_SCAN', modelTag: 'QUALITY_V2' },
+  const tokenImages = [
+    { src: '/btc_logo.png', alt: 'Bitcoin (BTC)', scanTag: 'ASSET_SCAN', modelTag: 'TRUST_V2' },
+    { src: '/eth_logo.png', alt: 'Ethereum (ETH)', scanTag: 'CONTRACT_SCAN', modelTag: 'PATTERN_V2' },
+    { src: '/sol_logo.png', alt: 'Solana (SOL)', scanTag: 'NETWORK_SCAN', modelTag: 'QUALITY_V2' },
   ];
   
   const analysisText = `> Scan complete.
-> TRUST SCORE: 78/100
-> SCAM RISK: MEDIUM
-> LAUNCH QUALITY: 64/100
-> ORIGINALITY: 51/100
-> RECOMMENDATION: review before entry`;
+> TRUST SCORE: 99/100
+> SCAM RISK: NONE
+> LAUNCH QUALITY: 98/100
+> ORIGINALITY: 100/100
+> RECOMMENDATION: institutional grade asset`;
 
   useEffect(() => {
     let i = 0;
+    setTypingText('');
     const typeWriter = () => {
       if (i < analysisText.length) {
         setTypingText(analysisText.substring(0, i + 1));
@@ -74,11 +77,11 @@ const memeImages = [
 
   useEffect(() => {
     const imageInterval = setInterval(() => {
-      setCurrentImageIndex((prevIndex) => (prevIndex + 1) % memeImages.length);
-    }, 60000);
+      setCurrentImageIndex((prevIndex) => (prevIndex + 1) % tokenImages.length);
+    }, 4000);
     
     return () => clearInterval(imageInterval);
-  }, [memeImages.length]);
+  }, [tokenImages.length]);
 
   const features = [
     { icon: <Target className="feature-svg" />, title: 'Trust Score', desc: 'Aggregates branding, asset quality, and visual consistency into a single 0-100 score.' },
@@ -109,18 +112,20 @@ const memeImages = [
 
       {/* WebGL EvilEye Background */}
       <div className="webgl-container" style={{ opacity: 0.5 }}>
-        <EvilEye
-          eyeColor="#FF6F37"
-          intensity={0.7}
-          pupilSize={0.5}
-          irisWidth={0.2}
-          glowIntensity={0.15}
-          scale={1.0}
-          noiseScale={0.8}
-          pupilFollow={0.5}
-          flameSpeed={0.6}
-          backgroundColor="#030005"
-        />
+        <Suspense fallback={null}>
+          <EvilEye
+            eyeColor="#FF6F37"
+            intensity={0.7}
+            pupilSize={0.5}
+            irisWidth={0.2}
+            glowIntensity={0.15}
+            scale={1.0}
+            noiseScale={0.8}
+            pupilFollow={0.5}
+            flameSpeed={0.6}
+            backgroundColor="#030005"
+          />
+        </Suspense>
       </div>
 
       {/* Overlay Gradients */}
@@ -184,7 +189,12 @@ const memeImages = [
 
       <main>
         {/* Hero Section */}
-        <section className="hero-section">
+        <motion.section 
+          initial={{ opacity: 0, y: 40 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, ease: [0.4, 0, 0.2, 1] }}
+          className="hero-section"
+        >
           <div className="hero-content">
             <div className="hero-badge">
               <span className="badge-pulse" />
@@ -192,7 +202,7 @@ const memeImages = [
             </div>
             
             <h1 className="hero-title">
-              <span className="title-line">Scan a token</span>
+              <span className="title-gradient">Scan a token</span>
               <span className="title-gradient">before you trust it</span>
             </h1>
             
@@ -206,26 +216,20 @@ const memeImages = [
                 <BoltIcon size={20} />
                 Launch Scanner
               </Link>
-              <Link to="/docs" className="btn-secondary-large">
+              <Link to="/docs" className="btn-secondary-large btn-quiet">
                 View Documentation
               </Link>
             </div>
 
             <div className="hero-trust">
-              <span className="trust-badge">
-                <Shield size={12} /> Visual Analysis
-              </span>
-              <span className="trust-badge">
-                <Brain size={12} /> Pattern Detection
-              </span>
-              <span className="trust-badge">
-                <BoltIcon size={12} /> Evidence-Based
-              </span>
+              <span className="trust-badge">Secure</span>
+              <span className="trust-badge">AI-Powered</span>
+              <span className="trust-badge">Instant</span>
             </div>
           </div>
 
           {/* Dashboard Preview */}
-          <div className="hero-preview">
+          <div className="hero-preview liquid-glass">
             <div className="preview-window">
               <div className="preview-header">
                 <div className="window-dots">
@@ -233,70 +237,70 @@ const memeImages = [
                   <span className="dot min" />
                   <span className="dot max" />
                 </div>
-                <span className="preview-title">neurox_scanner.exe</span>
+                <span className="preview-title">Visual evidence layer</span>
               </div>
               <div className="preview-body">
                 <div className="preview-left">
                   <div className="preview-scan">
-                    <img src={memeImages[currentImageIndex].src} alt={memeImages[currentImageIndex].alt} className="preview-image" />
+                    <img src={tokenImages[currentImageIndex].src} alt={tokenImages[currentImageIndex].alt} className="preview-image" />
                     <div className="scan-overlay" />
                     <div className="scan-line-anim" />
                   </div>
                   <div className="preview-tags">
-                    <span className="tag-scan">{memeImages[currentImageIndex].scanTag}</span>
-                    <span className="tag-model">{memeImages[currentImageIndex].modelTag}</span>
+                    <span className="tag-scan">{tokenImages[currentImageIndex].scanTag}</span>
+                    <span className="tag-model">{tokenImages[currentImageIndex].modelTag}</span>
                   </div>
                   <div className="preview-ranking">
-                    <div className="ranking-header">RED FLAGS</div>
+                    <div className="ranking-header" style={{ color: '#00E676' }}>TRUST SIGNALS</div>
                     <div className="ranking-row active">
-                      <span className="rank">!</span>
-                      <span className="name">branding consistency below threshold</span>
-                      <span className="score-high">HIGH</span>
+                      <span className="rank" style={{ color: '#00E676' }}>✓</span>
+                      <span className="name">decentralized network verified</span>
+                      <span className="score-high" style={{ color: '#00E676', textShadow: '0 0 10px rgba(0, 230, 118, 0.5)' }}>PASS</span>
                     </div>
                     <div className="ranking-row">
-                      <span className="rank">!</span>
-                      <span className="name">repeated visual motifs detected</span>
-                      <span className="score-high">MED</span>
+                      <span className="rank" style={{ color: '#00E676' }}>✓</span>
+                      <span className="name">on-chain volume highly organic</span>
+                      <span className="score-high" style={{ color: '#00E676', textShadow: '0 0 10px rgba(0, 230, 118, 0.5)' }}>PASS</span>
                     </div>
                     <div className="ranking-row">
-                      <span className="rank">!</span>
-                      <span className="name">promo styling appears derivative</span>
-                      <span className="score-mid">MED</span>
+                      <span className="rank" style={{ color: '#00E676' }}>✓</span>
+                      <span className="name">contract is immutable & renounced</span>
+                      <span className="score-mid" style={{ color: '#00E676', textShadow: '0 0 10px rgba(0, 230, 118, 0.5)' }}>PASS</span>
                     </div>
                     <div className="ranking-row">
-                      <span className="rank">!</span>
-                      <span className="name">aggressive retail-bait copy patterns</span>
-                      <span className="score-mid">LOW</span>
+                      <span className="rank" style={{ color: '#00E676' }}>✓</span>
+                      <span className="name">institutional-grade liquidity profile</span>
+                      <span className="score-mid" style={{ color: '#00E676', textShadow: '0 0 10px rgba(0, 230, 118, 0.5)' }}>PASS</span>
                     </div>
                   </div>
                 </div>
                 <div className="preview-right">
                   <div className="score-display">
                     <div className="score-label">TRUST SCORE</div>
-                    <div className="score-number">78<span className="score-total">/100</span></div>
-                    <div className="score-tag">MEDIUM RISK</div>
+                    <div className="score-number" style={{ color: '#00E676', textShadow: '0 0 20px rgba(0, 230, 118, 0.4)' }}>99<span className="score-total">/100</span></div>
+                    <div className="score-tag" style={{ background: 'rgba(0, 230, 118, 0.1)', color: '#00E676', border: '1px solid rgba(0, 230, 118, 0.5)' }}>INSTITUTIONAL GRADE</div>
                   </div>
                   <div className="preview-metrics">
                     <div className="metric">
                       <span className="metric-label">Trust Score</span>
                       <div className="metric-bar">
-                        <div className="metric-fill" style={{ width: '78%' }} />
+                        <div className="metric-fill" style={{ width: '99%', background: '#00E676', boxShadow: '0 0 10px rgba(0, 230, 118, 0.5)' }} />
                       </div>
-                      <span className="metric-value">78</span>
+                      <span className="metric-value" style={{ color: '#00E676' }}>99</span>
                     </div>
                     <div className="metric">
                       <span className="metric-label">Launch Quality</span>
                       <div className="metric-bar">
-                        <div className="metric-fill" style={{ width: '64%' }} />
+                        <div className="metric-fill" style={{ width: '98%', background: '#00E676', boxShadow: '0 0 10px rgba(0, 230, 118, 0.5)' }} />
                       </div>
-                      <span className="metric-value">64</span>
+                      <span className="metric-value" style={{ color: '#00E676' }}>98</span>
                     </div>
                     <div className="metric">
                       <span className="metric-label">Originality</span>
                       <div className="metric-bar">
-                        <div className="metric-fill" style={{ width: '51%' }} />
+                        <div className="metric-fill" style={{ width: '100%', background: '#00E676', boxShadow: '0 0 10px rgba(0, 230, 118, 0.5)' }} />
                       </div>
-                      <span className="metric-value">51</span>
+                      <span className="metric-value" style={{ color: '#00E676' }}>100</span>
                     </div>
                   </div>
                   <div className="analysis-stream">
@@ -310,7 +314,7 @@ const memeImages = [
               </div>
             </div>
           </div>
-        </section>
+        </motion.section>
 
         {/* Scroll Indicator */}
         {showScrollHint && (
@@ -321,7 +325,13 @@ const memeImages = [
         )}
 
         {/* Stats Section */}
-        <section id="stats" className="stats-section">
+        <motion.section 
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true, margin: "-100px" }}
+          transition={{ duration: 0.6 }}
+          id="stats" className="stats-section"
+        >
           <div className="stats-container">
             {stats.map((stat, i) => (
               <div key={i} className="stat-card">
@@ -332,10 +342,16 @@ const memeImages = [
               </div>
             ))}
           </div>
-        </section>
+        </motion.section>
 
         {/* Features Section */}
-        <section id="features" className="features-section">
+        <motion.section 
+          initial={{ opacity: 0, y: 40 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-100px" }}
+          transition={{ duration: 0.8 }}
+          id="features" className="features-section"
+        >
           <div className="section-header-animated">
             <h2 className="section-title">
               <span className="title-accent">//</span> TRUST INTELLIGENCE MODULES
@@ -345,7 +361,7 @@ const memeImages = [
           
           <div className="features-grid">
             {features.map((feature, i) => (
-              <div key={i} className="feature-card-enhanced" style={{ animationDelay: `${i * 0.1}s` }}>
+              <div key={i} className="feature-card-enhanced liquid-glass" style={{ animationDelay: `${i * 0.1}s` }}>
                 <div className="feature-icon-wrapper">
                   {feature.icon}
                 </div>
@@ -355,10 +371,16 @@ const memeImages = [
               </div>
             ))}
           </div>
-        </section>
+        </motion.section>
 
         {/* Pricing Section */}
-        <section id="pricing" className="pricing-section">
+        <motion.section 
+          initial={{ opacity: 0, y: 40 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-100px" }}
+          transition={{ duration: 0.8 }}
+          id="pricing" className="pricing-section"
+        >
           <div className="section-header-animated">
             <h2 className="section-title">
               <span className="title-accent">//</span> SCANNER TIERS
@@ -367,7 +389,7 @@ const memeImages = [
           </div>
           
           <div className="pricing-cards">
-            <div className="pricing-card-animated tier-free">
+            <div className="pricing-card-animated tier-free liquid-glass">
               <div className="tier-header">
                 <span className="tier-name">SCAVENGER</span>
                 <div className="tier-price">FREE</div>
@@ -381,7 +403,7 @@ const memeImages = [
               <Link to="/auth" className="btn-tier">Initialize</Link>
             </div>
             
-            <div className="pricing-card-animated tier-pro">
+            <div className="pricing-card-animated tier-pro liquid-glass">
               <div className="tier-badge">RECOMMENDED</div>
               <div className="tier-header">
                 <span className="tier-name text-primary">PRIME</span>
@@ -398,7 +420,7 @@ const memeImages = [
               </Link>
             </div>
 
-            <div className="pricing-card-animated tier-credits">
+            <div className="pricing-card-animated tier-credits liquid-glass">
               <div className="tier-header">
                 <span className="tier-name">CREDIT PACKS</span>
                 <div className="tier-price">$15+</div>
@@ -412,19 +434,25 @@ const memeImages = [
               <Link to="/auth" className="btn-tier">Buy Credits</Link>
             </div>
           </div>
-        </section>
+        </motion.section>
 
         {/* CTA Section */}
-        <section className="cta-section">
+        <motion.section 
+          initial={{ opacity: 0, scale: 0.95 }}
+          whileInView={{ opacity: 1, scale: 1 }}
+          viewport={{ once: true, margin: "-100px" }}
+          transition={{ duration: 0.6 }}
+          className="cta-section"
+        >
           <div className="cta-content">
-            <h2>Scan before you ape.</h2>
+            <h2 className="title-gradient">Scan before you ape.</h2>
             <p>Get a trust assessment in seconds. No account required for basic scans.</p>
             <Link to="/auth" className="btn-cta-large">
               <BoltIcon size={24} />
               Scan a Token
             </Link>
           </div>
-        </section>
+        </motion.section>
       </main>
 
       <footer className="footer-enhanced">
@@ -433,13 +461,14 @@ const memeImages = [
             <div className="logo-icon-glow small">
               <img src="/neurox-logo.png" alt="NEUROX" className="logo-img" />
             </div>
-            <span>NEUROX</span>
+            <span>© 2026 NEUROX Protocol. All systems operational.</span>
           </div>
-          <p className="footer-copy">© 2026 NEUROX. All rights reserved.</p>
           <div className="footer-links">
             <Link to="/docs">Documentation</Link>
-            <a href="https://x.com/NEUROOXX" target="_blank" rel="noopener noreferrer">X / Twitter</a>
+            <a href="https://x.com/neuroxscan" target="_blank" rel="noopener noreferrer">X / Twitter</a>
             <a href="https://t.me/NEEUROX" target="_blank" rel="noopener noreferrer">Telegram</a>
+            <Link to="/privacy">Privacy Policy</Link>
+            <Link to="/terms">Terms of Service</Link>
           </div>
         </div>
       </footer>

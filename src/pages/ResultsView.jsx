@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { createAnalysisJob, getJobByUpload, checkApiHealth, subscribeToJob } from '../lib/api'
@@ -42,6 +42,20 @@ const AnimatedScore = ({ score, maxScore = 100, color }) => {
     </span>
   )
 }
+
+const normalizeScoreData = (data) => {
+    if (!data) return null
+    if (data.globalScore !== undefined) return data
+    return {
+      globalScore: data.global_score,
+      subScores: data.sub_scores,
+      confidence: data.confidence,
+      rank: data.rank,
+      fixes: data.fixes,
+      bestPlatform: data.best_platform,
+      dropOffRisk: data.drop_off_risk
+    }
+  }
 
 const ProgressBar = ({ value, label, color, delay = 0 }) => {
   const [width, setWidth] = useState(0)
@@ -114,38 +128,35 @@ export default function ResultsView({ session }) {
         sseRef.current = null;
       }
     };
-  }, [uploadId])
+  }, [uploadId, fetchUpload])
 
-  const fetchUpload = async () => {
+  const fetchUpload = useCallback(async () => {
     console.log('[ResultsView] Fetching upload:', uploadId);
     try {
       const { data, error } = await supabase.from('uploads').select('*, projects(id, name)').eq('id', uploadId).single()
       console.log('[ResultsView] Supabase response - data:', data, 'error:', error);
-      
+
       if (error) {
         console.error('[ResultsView] Supabase error:', error);
         setServerError(`Database error: ${error.message}`);
         setLoading(false);
         return;
       }
-      
+
       if (data) {
         setUpload(data)
-        // Check if cached score_data is from old mock/fallback mode
         const isStaleMockData = data.score_data && (
           (data.score_data.rank && data.score_data.rank.includes('WARNING')) ||
           (data.score_data.rank && data.score_data.rank.includes('fallback')) ||
           !data.score_data.confidence ||
           (data.score_data.confidence && data.score_data.confidence.text === 'EXPERIMENTAL')
         )
-        
+
         if (data.score_data && !isStaleMockData) {
-          // Normalize score_data from snake_case to camelCase
           const normalized = normalizeScoreData(data.score_data)
           setAnalysisData(normalized)
           setLoading(false)
         } else {
-          // No valid cached result — run fresh analysis
           if (isStaleMockData) {
             console.log('[ResultsView] Stale mock data detected, re-analyzing...')
           }
@@ -159,7 +170,7 @@ export default function ResultsView({ session }) {
       setServerError(`Failed to load: ${err.message}`);
       setLoading(false);
     }
-  }
+  }, [uploadId])
   
   const normalizeScoreData = (data) => {
     if (!data) return null
@@ -178,14 +189,14 @@ export default function ResultsView({ session }) {
     }
   }
 
-  const executeAnalysisHook = async (targetData) => {
+  const executeAnalysisHook = useCallback(async (targetData) => {
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
       setAnalysisStatus('analyzing');
-      
+
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id || 'anonymous';
-      
+
       const requestBody = JSON.stringify({
         upload_id: targetData.id,
         user_id: userId,
@@ -193,7 +204,6 @@ export default function ResultsView({ session }) {
         file_url: targetData.file_url
       });
 
-      // Retry up to 3 times — Render free tier cold starts can take 30s+
       const MAX_RETRIES = 3;
       let lastError = null;
       
@@ -269,34 +279,7 @@ export default function ResultsView({ session }) {
     }
     
     setLoading(false);
-  }
-  
-  const generateMockResult = (uploadId) => {
-    const seed = uploadId.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-    const rand = (n) => ((seed * (n + 1) * 9301 + 49297) % 233280) / 233280;
-    
-    return {
-      globalScore: Math.floor(60 + rand(1) * 38),
-      subScores: [
-        { name: "Attention Pull", val: Math.floor(40 + rand(2) * 59) },
-        { name: "Visual Impact", val: Math.floor(40 + rand(3) * 59) },
-        { name: "Text Clarity", val: Math.floor(40 + rand(4) * 59) },
-        { name: "Meme Strength", val: Math.floor(40 + rand(5) * 59) },
-        { name: "Crypto Relevance", val: Math.floor(40 + rand(6) * 59) }
-      ],
-      confidence: rand(7) > 0.65 ? { text: "HIGH CONFIDENCE", color: "#10b981" } : rand(7) > 0.3 ? { text: "MEDIUM CONFIDENCE", color: "#f59e0b" } : { text: "EXPERIMENTAL", color: "#8b5cf6" },
-      rank: ["[ALPHA] Top 3%", "[WARNING] Low visibility", "[OPTIMAL] High retention", "[BETA] Needs refinement", "[CRITICAL] Volatile"][Math.floor(rand(8) * 5)],
-      fixes: [
-        "Increase shadow contrast by 15%",
-        "Crop outer margins by 10%",
-        "Adjust saturation levels",
-        "Center text layout",
-        "Add glowing elements"
-      ],
-      bestPlatform: ["X/Twitter", "TikTok", "Instagram", "YouTube"][Math.floor(rand(9) * 4)],
-      dropOffRisk: rand(10) * 0.8
-    };
-  }
+  }, [uploadId])
 
   const submitFeedback = async () => {
     if (!feedbackSentiment) return
@@ -472,8 +455,8 @@ export default function ResultsView({ session }) {
         <div className="results-glow" style={{ background: scoreColor }} />
       </div>
 
-      <header className={`results-header ${mounted ? 'mounted' : ''}`}>
-        <Link to={`/dashboard/project/${upload.project_id}`} className="back-link">
+      <header className={`results-header ${mounted ? 'mounted' : ''} liquid-glass`}>
+        <Link to={`/dashboard/project/${upload?.project_id}`} className="back-link">
           <ChevronLeft size={20} />
           Return to Project
         </Link>
@@ -487,7 +470,7 @@ export default function ResultsView({ session }) {
         <div className="results-grid-layout">
           {/* Left Column - Media Preview */}
           <div className="media-column">
-            <div className="media-container">
+            <div className="media-container liquid-glass">
               <div className="media-header">
                 <span className="recording-indicator" />
                 {upload.media_type === 'video' ? `VIDEO [${formatTime(videoTime)}]` : `IMAGE [${imageFilter}]`}
@@ -564,7 +547,7 @@ export default function ResultsView({ session }) {
           {/* Right Column - Analysis Results */}
           <div className="analysis-column">
             {/* Main Score */}
-            <div className="score-card-main" style={{ '--score-color': scoreColor }}>
+            <div className="score-card-main liquid-glass" style={{ '--score-color': scoreColor }}>
               <div className="score-label">NEURO VIRALITY SCORE</div>
               <div className="score-display">
                 <span className="score-number">
@@ -591,7 +574,7 @@ export default function ResultsView({ session }) {
             </div>
 
             {/* Sub-scores */}
-            <div className="subscores-card">
+            <div className="subscores-card liquid-glass">
               <h3 className="card-title">Sub-Routine Metrics</h3>
               <div className="subscores-list">
                 {subScores.map((score, i) => (
@@ -607,7 +590,7 @@ export default function ResultsView({ session }) {
             </div>
 
             {/* Actionable Directives */}
-            <div className="directives-card">
+            <div className="directives-card liquid-glass">
               <h3 className="card-title">
                 <AlertTriangle size={18} className="warning-icon" />
                 Actionable Directives
@@ -625,7 +608,7 @@ export default function ResultsView({ session }) {
             </div>
 
             {/* Feedback Section */}
-            <div className="feedback-card">
+            <div className="feedback-card liquid-glass">
               {upload.user_feedback || feedbackSubmitted ? (
                 <div className="feedback-submitted">
                   <CheckCircle size={32} />

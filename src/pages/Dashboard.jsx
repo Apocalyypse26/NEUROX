@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { verifyAndCredit } from '../lib/api'
 import { Link, useNavigate } from 'react-router-dom'
@@ -45,7 +45,7 @@ const ProjectCard = ({ project, index, onExport, onDelete }) => {
       }}
       style={{ animationDelay: `${index * 0.1}s` }}
     >
-      <div className={`project-card ${hovered ? 'hovered' : ''}`}>
+      <div className={`project-card ${hovered ? 'hovered' : ''} liquid-glass`}>
         <div className="project-card-header">
           <div className="project-icon">
             <Folder size={20} />
@@ -111,7 +111,7 @@ const ProjectCard = ({ project, index, onExport, onDelete }) => {
 }
 
 const StatCard = ({ icon, value, label, color }) => (
-  <div className="stat-card-mini" style={{ '--stat-color': color }}>
+  <div className="stat-card-mini liquid-glass" style={{ '--stat-color': color }}>
     <div className="stat-icon">{icon}</div>
     <div className="stat-content">
       <div className="stat-value">{value}</div>
@@ -175,9 +175,10 @@ export default function Dashboard({ session }) {
       }
       window.history.replaceState({}, '', window.location.pathname)
     }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps — init effect, runs once on mount
 
   const fetchCredits = async () => {
+    if (!session?.user?.id) return
     setLoadingCredits(true)
     try {
       const { data, error } = await supabase
@@ -232,21 +233,29 @@ export default function Dashboard({ session }) {
       return
     }
     setIsCreating(true)
-    
+
+    if (!session?.user?.id) {
+      showToast('Session expired. Please refresh the page.', 'error')
+      setIsCreating(false)
+      return
+    }
+
     try {
       const { data, error } = await supabase
         .from('projects')
         .insert([{ name: newProjectName, user_id: session.user.id }])
         .select()
-      
+
       if (error) {
         showToast('Failed to create project. Please try again.', 'error')
         logger.error('Error creating project:', error)
-      } else if (data) {
+      } else if (data && data.length > 0) {
         showToast('Project created successfully!', 'success')
         setProjects([data[0], ...projects])
         setNewProjectName('')
         navigate(`/dashboard/project/${data[0].id}`)
+      } else {
+        showToast('Project created but failed to load. Please refresh.', 'warning')
       }
     } catch (err) {
       showToast('Network error creating project. Please try again.', 'error')
@@ -325,7 +334,7 @@ export default function Dashboard({ session }) {
         <div className="dashboard-glow dashboard-glow-2" />
       </div>
 
-      <header className={`dashboard-header ${mounted ? 'mounted' : ''}`}>
+      <header className={`dashboard-header ${mounted ? 'mounted' : ''} liquid-glass`}>
         <div className="header-left">
           <Link to="/" className="header-logo">
             <div className="logo-icon-small">
@@ -417,7 +426,7 @@ export default function Dashboard({ session }) {
 
           {/* Create Project Section */}
           <section className="create-section">
-            <div className="create-card">
+            <div className="create-card liquid-glass">
               <div className="create-header">
                 <div className="create-icon">
                   <Plus size={24} />

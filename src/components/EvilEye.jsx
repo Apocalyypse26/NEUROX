@@ -345,9 +345,8 @@ export default function EvilEye({
       setWebglSupported(false);
     }
   }, [
-    eyeColor, intensity, pupilSize, irisWidth, glowIntensity, 
-    scale, noiseScale, pupilFollow, flameSpeed, backgroundColor,
-    textureSize, targetFPS
+    eyeColor, intensity, pupilSize, irisWidth, glowIntensity,
+    scale, noiseScale, pupilFollow, flameSpeed, backgroundColor
   ]);
 
   if (!webglSupported) {
