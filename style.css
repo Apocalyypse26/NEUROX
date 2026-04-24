@@ -379,10 +379,10 @@ body {
 }
 
 .hero-title {
-  font-size: 3.5rem;
+  font-size: 3.25rem;
   font-weight: 900;
   line-height: 1.1;
-  margin-bottom: 1.5rem;
+  margin: 1rem 0 2rem;
 }
 
 .title-line {
@@ -409,7 +409,7 @@ body {
   color: #E8E0F0;
   line-height: 1.7;
   margin-bottom: 2.5rem;
-  max-width: 500px;
+  max-width: 420px;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
 }
 
@@ -423,7 +423,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 1rem 2rem;
+  padding: 1.1rem 2.2rem;
   background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
   color: white;
   text-decoration: none;
@@ -435,8 +435,8 @@ body {
 }
 
 .btn-primary-large:hover {
-  transform: translateY(-3px) scale(1.03);
-  box-shadow: 0 15px 40px var(--color-primary-glow);
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 15px 50px var(--color-primary-glow);
 }
 
 .btn-secondary-large {
@@ -459,6 +459,19 @@ body {
   transform: translateY(-2px);
 }
 
+.btn-quiet {
+  font-size: 0.9rem;
+  padding: 0.9rem 1.5rem;
+  opacity: 0.7;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.btn-quiet:hover {
+  opacity: 1;
+  border-color: var(--color-primary);
+  background: rgba(255, 111, 55, 0.08);
+}
+
 .glow-button {
   animation: buttonGlow 3s ease-in-out infinite;
 }
@@ -477,10 +490,11 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.8rem;
-  color: #FFFFFF;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.85);
   font-weight: 500;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  opacity: 0.85;
 }
 
 /* Hero Preview Window */
@@ -493,14 +507,14 @@ body {
 
 .preview-window {
   width: 100%;
-  max-width: 600px;
+  max-width: 550px;
   background: linear-gradient(135deg, rgba(20, 10, 30, 0.9) 0%, rgba(10, 5, 20, 0.95) 100%);
   backdrop-filter: blur(30px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--border-radius);
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   overflow: hidden;
-  transform: rotateY(-5deg) rotateX(5deg);
+  transform: rotateY(-3deg) rotateX(3deg);
   transition: var(--transition-bounce);
   animation: windowFloat 6s ease-in-out infinite;
 }
@@ -565,8 +579,10 @@ body {
 .preview-image {
   width: 100%;
   aspect-ratio: 16/10;
-  object-fit: cover;
-  filter: saturate(1.2) contrast(1.1);
+  object-fit: contain;
+  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.5);
+  filter: drop-shadow(0 0 15px rgba(255, 69, 0, 0.4));
 }
 
 .scan-overlay {

@@ -86,7 +86,7 @@ export default function AuthPage({ session }) {
       </button>
 
       <div className={`auth-container ${mounted ? 'mounted' : ''}`}>
-        <div className="auth-card">
+        <div className="auth-card liquid-glass">
           <div className="auth-header">
             <div className="auth-icon">
               <Shield size={28} />

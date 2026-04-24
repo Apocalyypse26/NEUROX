@@ -1,91 +1,77 @@
-# NEUROX - AI Virality Scoring for Crypto Memes
+# NEUROX - Token Trust Intelligence
 
-## Project Structure
+NEUROX is a premium Crypto/AI SaaS platform engineered to provide institutional-grade virality scoring, pattern detection, and trust intelligence for crypto assets. Featuring a state-of-the-art "Liquid Glass" frontend and a multi-model AI backend, NEUROX scans token branding, launch assets, and public visuals to surface high-fidelity trust signals and scam risks in seconds.
 
-```
+## Project Architecture
+
+```text
 neurogravity/
-├── src/                    # React frontend
-├── backend/                # FastAPI backend
-│   ├── services/          # Business logic (TRIBE pipeline)
-│   ├── main.py            # FastAPI app
-│   ├── requirements.txt   # Python dependencies
-│   ├── start.sh           # Startup script
-│   └── Dockerfile         # Container config
-├── vercel.json            # Vercel config
-├── render.yaml            # Render Blueprint
-└── .env.production.example
+├── src/                    # React frontend (Vite)
+│   ├── components/         # Liquid Glass UI components
+│   ├── pages/              # Cinematic pages (Home, Dashboard, Auth, Results)
+│   └── ...
+├── premium.css             # High-fidelity design system and micro-interactions
+├── tailwind.config.js      # Core design tokens (Colors, Fonts, Layout)
+├── neurox-backend/         # Core AI pipelines and analysis queues
+├── backend/                # Legacy Python FastAPI endpoints
+└── supabase/               # Database configuration and Edge Functions
 ```
 
-## Deployment Guide
+## Core Features & Aesthetics
 
-### Step 1: Deploy Backend on Render
+- **Cinematic Liquid Glass UI**: Fully frosted, translucent glass components (`.liquid-glass`) with inner 3D gloss effects, multi-stop gradient masks, and 3D pill-shaped action buttons.
+- **Scroll-Aware Animations**: Integrated `framer-motion` for fluid, viewport-triggered entry sequences and structural reveals across all marketing and dashboard views.
+- **Visual Evidence Layer**: Simulated neural-link scanner previews that process token assets and visually demonstrate pattern detection logic on the landing page.
+- **Premium Design System**: Rooted in high-contrast dark mode (`#000000`) with high-voltage orange accents (`#FF4500` - `#FF6B35`), completely managed via modern Tailwind configuration.
+- **Tiered Scanning Engine**: Seamless progression from Free (Scavenger) to Pro (Prime at $49/mo), unlocking full diagnostic directives and PDF evidentiary exports.
 
-1. Go to [render.com](https://render.com) and sign up
-2. Click **New** → **Web Service**
-3. Connect your GitHub repository
-4. Configure the service:
-   - **Root Directory**: `backend`
-   - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `gunicorn main:app -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000`
-   - **Environment**: Python 3.11
-5. Add environment variables:
-   - `USE_REAL_TRIBE=false`
-   - `CORS_ORIGINS=https://your-app.vercel.app,https://*.vercel.app` (update after frontend deploy)
-6. Click **Create Web Service**
-7. Copy the URL (e.g., `https://neurox-api.onrender.com`)
+## Tech Stack
 
-### Step 2: Deploy Frontend on Vercel
-
-1. Go to [vercel.com](https://vercel.com) and sign up
-2. Click **Add New** → **Project**
-3. Import your GitHub repository
-4. Configure the project:
-   - **Framework Preset**: Vite
-   - **Root Directory**: `./` (root, not backend)
-5. Add environment variables:
-   - `VITE_SUPABASE_URL` = your Supabase project URL
-   - `VITE_SUPABASE_ANON_KEY` = your Supabase anon key
-   - `VITE_API_URL` = your Render backend URL (from Step 1)
-6. Click **Deploy**
-
-### Step 3: Update CORS
-
-After frontend deployment, update Render backend environment variable:
-- `CORS_ORIGINS` = `https://your-frontend.vercel.app,https://*.vercel.app`
-
-### Step 4: Verify Deployment
-
-- Backend health: `https://neurox-api.onrender.com/api/health`
-- Frontend should load at your Vercel URL
-- Test file upload and analysis
+- **Frontend**: React, Vite, Tailwind CSS, Framer Motion
+- **Backend & AI**: Node.js, Python (FastAPI), Claude Vision API, Helius (On-chain data)
+- **Infrastructure**: Supabase (PostgreSQL, Auth, Storage, Edge Functions)
 
 ## Local Development
 
-### Frontend
+### Frontend Setup
 ```bash
+# Install dependencies
 npm install
+
+# Start Vite dev server with Stagewise integrations
 npm run dev
 ```
 
-### Backend
+### Backend Setup (Node/Python)
 ```bash
-cd backend
-pip install -r requirements.txt
-uvicorn main:app --reload
+# Ensure you are running inside neurox-backend
+cd neurox-backend
+npm install
+npm run dev
 ```
 
 ## Environment Variables
 
 | Variable | Description | Where to Set |
 |----------|-------------|--------------|
-| `VITE_SUPABASE_URL` | Supabase project URL | Vercel |
-| `VITE_SUPABASE_ANON_KEY` | Supabase anonymous key | Vercel |
-| `VITE_API_URL` | Backend API URL | Vercel |
-| `USE_REAL_TRIBE` | Use real TRIBE pipeline | Render |
-| `CORS_ORIGINS` | Allowed frontend origins | Render |
+| `VITE_SUPABASE_URL` | Supabase project endpoint | Frontend (Vercel) |
+| `VITE_SUPABASE_ANON_KEY` | Supabase anonymous public key | Frontend (Vercel) |
+| `VITE_API_URL` | Backend pipeline URL | Frontend (Vercel) |
+| `USE_REAL_TRIBE` | Toggle mock vs. real Claude analysis | Backend |
+| `CORS_ORIGINS` | Permitted frontend domains | Backend |
 
-## Free Tier Notes
+## Production Deployment
 
-- **Render**: Sleeps after 15 min of inactivity (cold start ~30s)
-- **Vercel**: 100GB bandwidth/month
-- **Supabase**: 500MB database, 1GB file storage
+### 1. Deploy API (Render/Railway)
+1. Connect your repository and point the Root Directory to the appropriate backend folder.
+2. Build and expose the service on port `8000` or `3000` depending on the environment.
+3. Configure your production environment variables (e.g. `CORS_ORIGINS` left empty initially).
+
+### 2. Deploy Frontend (Vercel)
+1. Import repository and select **Vite**.
+2. Keep the root directory at `./`.
+3. Add the `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and the live backend API URL.
+4. Deploy the application.
+
+### 3. Finalize CORS
+Once Vercel provisions a production URL (e.g., `https://neurox.vercel.app`), append it to the backend `CORS_ORIGINS` variable to permit secure cross-origin requests.
