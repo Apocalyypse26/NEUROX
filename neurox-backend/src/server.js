@@ -90,11 +90,15 @@ app.get("/api/health", async (_req, res) => {
   };
 
   const allHealthy = Object.values(checks.services).every(
-    (s) => s.status === "healthy" || s.status === "configured"
+    (s) => s.status === "healthy" || s.status === "configured" || s.status === "not_configured"
   );
 
-  res.status(allHealthy ? 200 : 503).json({
-    status: allHealthy ? "operational" : "degraded",
+  const isDegraded = process.env.NODE_ENV === "production"
+    ? !allHealthy
+    : Object.values(checks.services).some((s) => s.status === "unhealthy");
+
+  res.status(isDegraded ? 503 : 200).json({
+    status: isDegraded ? "degraded" : "operational",
     version: "2.5",
     ...checks,
   });
