@@ -5,7 +5,7 @@
 import { supabase } from "../services/supabase.js";
 
 const HF_API_URL =
-  "https://api-inference.huggingface.co/models/sentence-transformers/clip-ViT-B-32";
+  "https://api-inference.huggingface.co/models/openai/clip-vit-base-patch32";
 const HF_API_KEY = process.env.HUGGINGFACE_API_KEY;
 
 /**
@@ -103,6 +103,7 @@ export async function checkBrandOriginality(imageBuffer, scanId) {
  */
 async function getClipEmbedding(imageBuffer) {
   if (!HF_API_KEY) {
+    console.error("[BRAND_ORIGINAL] HUGGINGFACE_API_KEY is missing from environment!");
     throw new Error("HUGGINGFACE_API_KEY not configured");
   }
 
