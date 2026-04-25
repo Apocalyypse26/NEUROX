@@ -124,8 +124,9 @@ app.get("/api/health", async (_req, res) => {
   });
 });
 
-// ── Scan Routes ──────────────────────────────────────
-app.use("/api/scan", scanRoutes);
+// ── Scan Routes (Mounting at /api for frontend compatibility) ────────
+app.use("/api", scanRoutes);
+app.use("/api/scan", scanRoutes); // Keep this for future-proofing
 
 // ── 404 Handler ──────────────────────────────────────
 app.use((_req, res) => {
